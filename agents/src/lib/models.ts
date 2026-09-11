@@ -110,30 +110,55 @@ async function openaiProvider(): Promise<ModelProvider> {
     async complete(modelId, prompt, runParams) {
       if (modelId === NULL_MODEL) return NULL_ANSWER;
       const reasoningModel = /^(o\d|gpt-5)/.test(modelId);
+      const effort = (process.env.OPENAI_REASONING_EFFORT ?? "low") as "minimal" | "low" | "medium" | "high";
       const res = await client.chat.completions.create({
         model: modelId,
         messages: [
           { role: "system", content: runParams.system },
           { role: "user", content: prompt },
         ],
-        max_completion_tokens: reasoningModel ? runParams.max_tokens + 2048 : runParams.max_tokens,
-        ...(reasoningModel ? {} : { temperature: runParams.temperature }),
+        // reasoning models spend hidden tokens before answering and reject sampling params
+        max_completion_tokens: reasoningModel ? runParams.max_tokens + 4096 : runParams.max_tokens,
+        ...(reasoningModel ? { reasoning_effort: effort } : { temperature: runParams.temperature }),
       });
       return (res.choices[0]?.message?.content ?? "").trim();
     },
   };
 }
 
+// ------------------------------------------------------------------ spend guard
+
+/** Hard cap on paid model calls per process so a bug or a hostile counterparty cannot drain credits. */
+export const MODEL_CALL_BUDGET = Number(process.env.MODEL_CALL_BUDGET ?? 3000);
+
+export function withBudget(p: ModelProvider, budget = MODEL_CALL_BUDGET): ModelProvider {
+  let calls = 0;
+  return {
+    name: p.name,
+    async complete(modelId, prompt, runParams, ctx) {
+      if (++calls > budget) {
+        throw new Error(`model call budget of ${budget} exhausted for this process (raise MODEL_CALL_BUDGET if intended)`);
+      }
+      return p.complete(modelId, prompt, runParams, ctx);
+    },
+  };
+}
+
 // ------------------------------------------------------------------ selection
 
-export async function getProvider(name = process.env.MODEL_PROVIDER ?? "mock"): Promise<ModelProvider> {
+export function providerName(): string {
+  const v = (process.env.MODEL_PROVIDER ?? "").trim();
+  return v === "" ? "mock" : v;
+}
+
+export async function getProvider(name = providerName()): Promise<ModelProvider> {
   switch (name) {
     case "mock":
       return mockProvider;
     case "anthropic":
-      return anthropicProvider();
+      return withBudget(await anthropicProvider());
     case "openai":
-      return openaiProvider();
+      return withBudget(await openaiProvider());
     default:
       throw new Error(`unknown MODEL_PROVIDER ${name}`);
   }
@@ -142,6 +167,7 @@ export async function getProvider(name = process.env.MODEL_PROVIDER ?? "mock"): 
 /** Sensible pinned model ids per provider for the weak/strong pair. */
 export function defaultModels(provider: string): { weak: string; strong: string } {
   if (provider === "anthropic") return { weak: "claude-haiku-4-5", strong: "claude-sonnet-5" };
-  if (provider === "openai") return { weak: "gpt-4o-mini", strong: "gpt-4.1" };
+  // Cheapest pair with a real capability gap: a non-reasoning nano vs a reasoning nano (pinned snapshots).
+  if (provider === "openai") return { weak: "gpt-4.1-nano-2025-04-14", strong: "gpt-5-nano-2025-08-07" };
   return { weak: "mock-weak", strong: "mock-strong" };
 }

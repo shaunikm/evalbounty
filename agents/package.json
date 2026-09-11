@@ -6,14 +6,15 @@
     "buyer": "tsx src/buyer.ts",
     "seller": "tsx src/seller.ts",
     "arbiter": "tsx src/arbiter.ts",
-    "deploy": "tsx src/deploy.ts",
     "demo": "tsx src/demo.ts",
     "e2e": "tsx src/e2e-anvil.ts",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "gen-abi": "tsx scripts/gen-abi.ts",
     "gen-fixtures": "tsx scripts/gen-fixtures.ts",
-    "fund": "tsx src/deploy.ts --fund-only"
+    "fund": "tsx src/deploy.ts --fund-only",
+    "calibrate": "tsx scripts/calibrate.ts",
+    "deploy-contracts": "tsx src/deploy.ts"
   },
   "dependencies": {
     "@openzeppelin/merkle-tree": "^1.0.8",

@@ -2,8 +2,8 @@
  * Deploy CentralizedArbitrator + EvalBounty, fund the agent wallets from the deployer, and write
  * the addresses into agents/.env and dashboard/config.js.
  *
- *   CHAIN=anvil   pnpm deploy            (uses agents/.env keys; anvil must be running)
- *   CHAIN=sepolia pnpm deploy
+ *   CHAIN=anvil   pnpm deploy-contracts  (uses agents/.env keys; anvil must be running)
+ *   CHAIN=sepolia pnpm deploy-contracts
  */
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";

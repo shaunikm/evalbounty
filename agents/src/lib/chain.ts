@@ -85,12 +85,12 @@ export function wallet(privateKey: Hex): Wallet {
 
 function evalBountyAddress(): Address {
   const a = env.evalBounty;
-  if (!a) throw new Error("EVALBOUNTY_ADDRESS not set; run `pnpm deploy` first");
+  if (!a) throw new Error("EVALBOUNTY_ADDRESS not set; run `pnpm deploy-contracts` first");
   return a;
 }
 function arbitratorAddress(): Address {
   const a = env.arbitrator;
-  if (!a) throw new Error("ARBITRATOR_ADDRESS not set; run `pnpm deploy` first");
+  if (!a) throw new Error("ARBITRATOR_ADDRESS not set; run `pnpm deploy-contracts` first");
   return a;
 }
 const evalBountyRO = (address: Address) => getContract({ address, abi: evalBountyAbi, client: publicClient() });

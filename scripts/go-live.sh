@@ -12,7 +12,7 @@ DEPLOYER=$(cast wallet address --private-key "$DEPLOYER_KEY")
 echo "deployer $DEPLOYER  balance $(cast balance "$DEPLOYER" --rpc-url "$RPC_URL" --ether) ETH  gas $(cast gas-price --rpc-url "$RPC_URL") wei"
 
 if [[ -z "${EVALBOUNTY_ADDRESS:-}" ]]; then
-  pnpm --filter agents deploy
+  pnpm --filter agents deploy-contracts
   set -a; source agents/.env; set +a
 else
   echo "already deployed at $EVALBOUNTY_ADDRESS (delete EVALBOUNTY_ADDRESS in agents/.env to redeploy)"

@@ -14,7 +14,7 @@ import { DisputeKind, Status, StatusName, arbitrator, env, eth, evalBounty, log,
 import { decryptBundle, generateKeyPair, sealKeyTo, type KeyPairHex } from "./lib/crypto.js";
 import { deliveredCiphertext, revealedTasks, type Revealed } from "./lib/events.js";
 import { buildTaskTree } from "./lib/merkle.js";
-import { defaultModels, getProvider, type ModelProvider } from "./lib/models.js";
+import { defaultModels, getProvider, providerName, type ModelProvider } from "./lib/models.js";
 import { loadState, saveState } from "./lib/state.js";
 import { claimsHold, fmt, measureBundle, transcriptHash, type Transcript } from "./lib/verify.js";
 import { toClaimSpec, withdrawIfAny } from "./seller.js";
@@ -33,8 +33,8 @@ export interface BuyerConfig {
   rewardWei: bigint;
 }
 
-export function defaultBuyerConfig(providerName = process.env.MODEL_PROVIDER ?? "mock"): BuyerConfig {
-  const m = defaultModels(providerName);
+export function defaultBuyerConfig(provider = providerName()): BuyerConfig {
+  const m = defaultModels(provider);
   return {
     domainTag: "exact-answer-reasoning",
     taskCount: 30,
@@ -44,7 +44,7 @@ export function defaultBuyerConfig(providerName = process.env.MODEL_PROVIDER ?? 
     weakMaxBps: 3500,
     strongMinBps: 6500,
     nullMaxBps: 500,
-    runs: providerName === "mock" ? 2 : 3,
+    runs: provider === "mock" ? 2 : 3,
     toleranceBps: 1000,
     rewardWei: parseEther("0.002"),
   };
