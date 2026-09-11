@@ -55,6 +55,18 @@ Sepolia: `./scripts/set-keys.sh` puts any keys into `agents/.env` with hidden in
 
 Dashboard hosting: `dashboard/` is a static site that reads only contract events through a public RPC. `vercel.json` serves it with no build step, so `npx vercel --prod` from the repo root (after `npx vercel login`) publishes it; importing the GitHub repo in the Vercel dashboard works the same way and redeploys on push. `.github/workflows/pages.yml` is an equivalent GitHub Pages deployment if preferred.
 
+## Why sampling plus optimistic verification, and what would be smarter
+
+"Just sample four tasks and rerun the rest after paying" sounds rustic. It is the standard architecture for verifying something you cannot check in full or cannot reveal, and each piece has a pedigree: Filecoin's [Proof-of-Spacetime](https://spec.filecoin.io/algorithms/pos/post/) challenges pseudo-random pieces of stored data because checking everything is too expensive; Belenkiy et al. ([*Incentivizing Outsourced Computation*, 2008](https://eprint.iacr.org/2013/156)) formalise spot-checking with rewards and fines against rational cheaters, which is exactly what the bond and reputation counters do; TrueBit and optimistic rollups accept results optimistically and escalate to a dispute only on challenge, which is our accept-or-dispute step; FairSwap (CCS 2018) applies the same idea to selling a digital good. The sample is small because *revealing a task destroys it*: four tasks catch a 30 %-junk bundle 76 % of the time while costing the seller little, and the full 30-task check runs the moment it safely can, after delivery, on the buyer's machine, with the arbiter rerunning on dispute.
+
+Three upgrades are genuinely smarter, in the order I would build them:
+
+1. **Verifiable encryption for delivery.** Tas, Seres, Bonneau, Nikolaenko et al., [*Atomic and Fair Data Exchange via Blockchain*](https://eprint.iacr.org/2024/418) (CCS 2024), make the client pay *if and only if* the revealed key decrypts a ciphertext consistent with the on-chain commitment ("verifiable encryption under committed key"). That would turn our BadDelivery dispute into a cryptographic guarantee and remove the arbiter from delivery integrity entirely.
+2. **Attested measurement before payment.** Run the 30-task evaluation inside a trusted execution environment, as [TRUCE](https://arxiv.org/abs/2403.00393) proposes for private benchmarking in confidential VMs, or prove the seller's model-API transcripts with zkTLS ([DECO](https://review.stanfordblockchain.xyz/p/74-cryptography-research-spotlight), [Reclaim](https://blog.reclaimprotocol.org/posts/zk-in-zktls), TLSNotary). Either lets a buyer verify *all* claims before paying without seeing a single task; the trust moves to the TEE vendor or attestor, and the arbiter becomes a fallback.
+3. **Reputation-scaled bonds** in the contract (see above).
+
+What is *not* viable: proving model performance in zero knowledge. The pinned models are closed APIs with no accessible weights, and even for open models current systems such as [zkLLM](https://arxiv.org/abs/2404.16109) take on the order of fifteen minutes per inference for a 13B model; ninety inferences per claim is not a payment predicate. Evaluating on-chain is likewise impossible: a contract cannot call a model. Hence optimistic verification with a bonded arbiter today, and (1) and (2) as the production path.
+
 ## Configuration (nothing is hard-coded to this deployment)
 
 | Where | Setting | Meaning |
