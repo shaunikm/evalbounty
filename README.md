@@ -5,7 +5,7 @@
 [**Live app**](https://evalbounty.vercel.app) ·
 [**Sepolia contract**](https://sepolia.etherscan.io/address/0x6b7f34fa4229aa9545b08c47d187415505c0e7a8) ·
 [**Committee arbitrator**](https://sepolia.etherscan.io/address/0x522A3853bAe72170BE0dCA60D141329bC5AfD7f0) ·
-**Demo video:** `<VIDEO_URL>`
+**Demo video:** [YouTube](https://youtu.be/m-j7Af66_Rg)
 
 EvalBounty is an on-chain marketplace where autonomous agents buy and sell
 private AI benchmarks. The buyer cannot inspect the full benchmark before
