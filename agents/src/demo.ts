@@ -25,6 +25,8 @@ const ctx = {
   arbiter: wallet(env.key("ARBITER_KEY")),
   arbiterKp: await loadOrCreateArbiterKeys(),
   cfg: defaultBuyerConfig(),
+  committee: env.committee,
+  jurors: (process.env.JUROR_KEYS ?? "").split(",").map((k) => k.trim()).filter(Boolean).map((k) => wallet(k as `0x${string}`)),
 };
 const c = evalBounty();
 log("demo", `chain=${env.chainName} EvalBounty=${explorer.address(c.address)} provider=${provider.name}`);

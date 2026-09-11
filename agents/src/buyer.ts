@@ -7,10 +7,12 @@
  *
  * Every decision is one plain-English log line (the video narrates itself).
  */
-import { bytesToHex, decodeEventLog, encodeAbiParameters, hexToBytes, keccak256, parseEther, parseEventLogs, type Hex } from "viem";
+import { bytesToHex, decodeEventLog, encodeAbiParameters, hexToBytes, keccak256, parseEther, parseEventLogs, type Address, type Hex } from "viem";
 import { evalBountyAbi } from "./lib/abi.js";
 import { grade, objectiveTaskChecks, parseBundle, runParamsHash, DEFAULT_RUN_PARAMS, type Task } from "./lib/bundle.js";
-import { DisputeKind, Status, StatusName, arbitrator, chain, env, eth, evalBounty, log, publicClient, secretOf, short, sleep, tx, wallet, type Wallet } from "./lib/chain.js";
+import { DisputeKind, Status, StatusName, arbitratorKind, chain, committee, env, eth, evalBounty, log, publicClient, secretOf, short, sleep, tx, wallet, type Wallet } from "./lib/chain.js";
+import { arbitratorAbi } from "./lib/abi.js";
+import { drawIfNeeded } from "./juror.js";
 import { decryptBundle, deriveKeyPair, publicKeyFromSecret, sealKeyTo, type KeyPairHex } from "./lib/crypto.js";
 import { bountyCreatedEvents, deliveredCiphertext, revealedTasks, type Revealed } from "./lib/events.js";
 import { buildTaskTree } from "./lib/merkle.js";
@@ -46,7 +48,7 @@ export function defaultBuyerConfig(provider = providerName()): BuyerConfig {
     nullMaxBps: 500,
     runs: provider === "mock" ? 2 : 3,
     toleranceBps: 1000,
-    rewardWei: parseEther("0.002"),
+    rewardWei: parseEther(process.env.BUYER_REWARD_ETH ?? "0.002"),
   };
 }
 
@@ -96,6 +98,20 @@ export async function createBounty(w: Wallet, cfg: BuyerConfig, who = "buyer"): 
     runParamsHash: runParamsHash(DEFAULT_RUN_PARAMS),
   };
   log(who, `posting bounty: ${cfg.taskCount} ${cfg.domainTag} tasks, reveal ${cfg.sampleSize}, band weak(${cfg.weakModel})<=${fmt(cfg.weakMaxBps)} strong(${cfg.strongModel})>=${fmt(cfg.strongMinBps)} null<=${fmt(cfg.nullMaxBps)}, ±${fmt(cfg.toleranceBps)}, reward ${eth(cfg.rewardWei)}`);
+  // Economic sizing: never post more than the arbitrator's juror stake can secure (CoC >= lambda * PfC).
+  const arbAddr = (await c.read.arbitrator()) as Address;
+  if ((await arbitratorKind(arbAddr)) === "committee") {
+    const secured = await committee(arbAddr).read.securedValue();
+    const bondBps = BigInt(await c.read.minSellerBondBps());
+    const pfc = cfg.rewardWei + (cfg.rewardWei * bondBps) / 10_000n;
+    if (pfc > secured) {
+      const msg = `profit-from-corruption ${eth(pfc)} exceeds what the committee's stake secures (${eth(secured)})`;
+      if (process.env.BUYER_ENFORCE_SECURITY === "1") throw new Error(`refusing to post: ${msg}`);
+      log(who, `warning: ${msg} (BUYER_ENFORCE_SECURITY=1 would refuse; testnet stakes are small)`);
+    } else {
+      log(who, `committee arbitrator secures up to ${eth(secured)}; this bounty's reward + bond is ${eth(pfc)}`);
+    }
+  }
   // Pin the nonce so the key derivation and the transaction agree even if another tx is in flight.
   const r = await tx(who, "createBounty", () => c.write.createBounty([spec, kp.publicKey as Hex], { value: cfg.rewardWei, nonce }));
   const logs = parseEventLogs({ abi: evalBountyAbi, logs: r.logs, eventName: "BountyCreated" });
@@ -248,10 +264,18 @@ export async function verifyDelivery(id: bigint, ciphertext: Uint8Array, kp: Key
     return { action: "accept", transcript };
   }
   for (const r of v.reasons) log(who, `  ✗ ${r}`);
-  const arbPub = (await arbitrator().read.arbiterPubKey()) as Hex;
-  const sealed = await sealKeyTo(key, arbPub);
-  const evidence = encodeAbiParameters([{ type: "bytes" }, { type: "bytes32" }], [bytesToHex(sealed), transcriptHash(transcript)]);
-  log(who, `CLAIMS FAILED -> disputing; bundle key sealed to arbiter ${short(arbPub)} (bundle stays private), my transcript hash ${short(transcriptHash(transcript))}`);
+  const arbAddr = (await c.read.arbitrator()) as Address;
+  let sealedHex: Hex = "0x";
+  if ((await arbitratorKind(arbAddr)) === "committee") {
+    // Jurors are unknown until sortition: keep K and seal it to each drawn juror afterwards.
+    saveState(`buyer-bundlekey-${id}`, { key: bytesToHex(key) });
+    log(who, `CLAIMS FAILED -> disputing before a sortitioned committee; the bundle key will be sealed to the drawn jurors after the panel is known`);
+  } else {
+    const arbPub = (await publicClient().readContract({ address: arbAddr, abi: arbitratorAbi, functionName: "arbiterPubKey" })) as Hex;
+    sealedHex = bytesToHex(await sealKeyTo(key, arbPub));
+    log(who, `CLAIMS FAILED -> disputing; bundle key sealed to arbiter ${short(arbPub)} (bundle stays private), my transcript hash ${short(transcriptHash(transcript))}`);
+  }
+  const evidence = encodeAbiParameters([{ type: "bytes" }, { type: "bytes32" }], [sealedHex, transcriptHash(transcript)]);
   return { action: "dispute", kind: DisputeKind.ClaimsFailed, evidence, reasons: v.reasons, transcript };
 }
 
@@ -268,6 +292,36 @@ export async function buyerVerify(w: Wallet, id: bigint, provider: ModelProvider
   const cost = await c.read.disputeCost([id]);
   log(who, `posting dispute bond + arbitration fee ${eth(cost)}`);
   return { verdict, receipt: await tx(who, `dispute #${id} (${verdict.kind === DisputeKind.BadDelivery ? "BadDelivery" : "ClaimsFailed"})`, () => c.write.dispute([id, verdict.kind, verdict.evidence], { value: cost })) };
+}
+
+/**
+ * Committee mode, after a ClaimsFailed dispute: once the panel is drawn, seal the bundle key to
+ * every juror's registered X25519 key and post the sealed keys. Idempotent; returns true when done.
+ */
+export async function buyerHandoffKeys(w: Wallet, id: bigint, who = "buyer"): Promise<boolean> {
+  const c = evalBounty(w);
+  const b = await c.read.getBounty([id]);
+  if (b.status !== Status.Disputed || b.disputeKind !== DisputeKind.ClaimsFailed) return false;
+  if ((await arbitratorKind(b.arbitrator)) !== "committee") return false;
+  const cm = committee(b.arbitrator, w);
+  const d = await cm.read.getDispute([b.disputeId]);
+  if (d[3] !== 0) return false; // solved
+  if (d[10] !== `0x${"0".repeat(64)}`) return true; // keys already posted
+  let panel = [...d[5]] as Address[];
+  if (panel.length === 0) panel = await drawIfNeeded(w, b.arbitrator, b.disputeId, who);
+  if (panel.length === 0) return false; // sortition block not mined yet
+  const st = loadState<{ key: Hex }>(`buyer-bundlekey-${id}`);
+  if (!st) throw new Error(`no bundle key saved for #${id}`);
+  const key = new Uint8Array(Buffer.from(st.key.slice(2), "hex"));
+  const sealed: Hex[] = [];
+  for (const j of panel) {
+    const [, pubKey] = await cm.read.jurorInfo([j]);
+    if (pubKey === `0x${"0".repeat(64)}`) throw new Error(`juror ${j} has no X25519 key registered`);
+    sealed.push(bytesToHex(await sealKeyTo(key, pubKey as Hex)));
+  }
+  log(who, `panel drawn: ${panel.map(short).join(", ")}; sealing the bundle key to each juror (bundle stays private)`);
+  await tx(who, `submitKeys(dispute ${b.disputeId})`, () => cm.write.submitKeys([b.disputeId, id, sealed]));
+  return true;
 }
 
 // ------------------------------------------------------------------ long-running loop
@@ -293,6 +347,7 @@ export async function runBuyer(cfg = defaultBuyerConfig(), opts: { maxBounties?:
         const b = await c.read.getBounty([id]);
         if (b.status === Status.Sampled) await buyerJudge(w, id, provider, who);
         else if (b.status === Status.Delivered) await buyerVerify(w, id, provider, who);
+        else if (b.status === Status.Disputed) await buyerHandoffKeys(w, id, who);
         if (![Status.Settled, Status.Refunded, Status.Cancelled].includes(b.status as 6 | 7 | 8)) live.push(id);
         const now = (await c.read.getBounty([id])).status;
         if (lastStatus.get(id.toString()) !== now) {

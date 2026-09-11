@@ -17,7 +17,9 @@
     "deploy-contracts": "tsx src/deploy.ts",
     "fetch-datasets": "tsx scripts/fetch-datasets.ts",
     "calibrate-families": "tsx scripts/calibrate-families.ts",
-    "recover-key": "tsx scripts/recover-key.ts"
+    "recover-key": "tsx scripts/recover-key.ts",
+    "deploy-committee": "tsx src/deploy.ts --committee",
+    "jurors": "tsx src/juror.ts"
   },
   "dependencies": {
     "@openzeppelin/merkle-tree": "^1.0.8",

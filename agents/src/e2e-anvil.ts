@@ -11,6 +11,11 @@ const keep = process.argv.includes("--keep"); // leave anvil running and write d
 const noSpawn = process.argv.includes("--no-spawn"); // use an anvil that is already running on ANVIL_PORT
 
 // Anvil's well-known dev accounts. Set BEFORE importing anything that reads env.
+const ANVIL_JUROR_KEYS = [
+  "0x8b3a350cf5c34c9194ca85829a2df0ec3153be0318b5e2d3348e872092edffba",
+  "0x92db14e403b83dfe3df233f83dfa3a0d7096f21ca9b0d6d6b8d88b2b4ec1564e",
+  "0x4bbbf85ce3377467afe5d46f804f221813b2bb87f24d81f60f1fcdbf7cbf4356",
+] as const;
 const ANVIL_KEYS = [
   "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80",
   "0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d",
@@ -29,8 +34,10 @@ process.env.ARBITER_KEY = ANVIL_KEYS[3];
 process.env.JUNK_SELLER_KEY = ANVIL_KEYS[4];
 delete process.env.EVALBOUNTY_ADDRESS;
 delete process.env.ARBITRATOR_ADDRESS;
+delete process.env.COMMITTEE_ADDRESS;
+process.env.BUYER_ENFORCE_SECURITY = "1"; // anvil stakes are large enough to enforce CoC >= lambda * PfC
 
-const { deploy } = await import("./deploy.js");
+const { deploy, deployCommittee } = await import("./deploy.js");
 const { env, log, publicClient, resetClients, wallet } = await import("./lib/chain.js");
 const { getProvider } = await import("./lib/models.js");
 const { defaultBuyerConfig } = await import("./buyer.js");
@@ -61,8 +68,11 @@ try {
   resetClients();
   log("e2e", `anvil up on :${PORT}, chain=${env.chainName}`);
   const dep = await deploy({ fund: false, persist: false });
+  const committeeAddr = await deployCommittee({ persist: false });
   const provider = await getProvider();
   const ctx = {
+    committee: committeeAddr,
+    jurors: ANVIL_JUROR_KEYS.map((k) => wallet(k)),
     provider,
     buyer: wallet(env.key("BUYER_KEY")),
     seller: wallet(env.key("SELLER_KEY")),

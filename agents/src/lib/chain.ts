@@ -19,7 +19,7 @@ import {
 } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import * as chains from "viem/chains";
-import { arbitratorAbi, evalBountyAbi } from "./abi.js";
+import { arbitratorAbi, committeeAbi, evalBountyAbi } from "./abi.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
 export const AGENTS_DIR = resolve(here, "../..");
@@ -44,6 +44,9 @@ export const env = {
   },
   get deployBlock() {
     return BigInt(process.env.DEPLOY_BLOCK || "0");
+  },
+  get committee() {
+    return (process.env.COMMITTEE_ADDRESS || undefined) as Address | undefined;
   },
   key(name: KeyName): Hex {
     const v = process.env[name];
@@ -138,6 +141,30 @@ export function arbitrator(): ReturnType<typeof arbitratorRO>;
 export function arbitrator(w: Wallet): ReturnType<typeof arbitratorRW>;
 export function arbitrator(w?: Wallet) {
   return w ? arbitratorRW(arbitratorAddress(), w) : arbitratorRO(arbitratorAddress());
+}
+
+const committeeRO = (address: Address) => getContract({ address, abi: committeeAbi, client: publicClient() });
+const committeeRW = (address: Address, w: Wallet) => getContract({ address, abi: committeeAbi, client: { public: publicClient(), wallet: w } });
+export type CommitteeRO = ReturnType<typeof committeeRO>;
+export type CommitteeRW = ReturnType<typeof committeeRW>;
+
+/** Committee arbitrator handle. Pass the address (usually EvalBounty.arbitrator()) or rely on COMMITTEE_ADDRESS. */
+export function committee(address?: Address): CommitteeRO;
+export function committee(address: Address | undefined, w: Wallet): CommitteeRW;
+export function committee(address?: Address, w?: Wallet) {
+  const a = address ?? env.committee;
+  if (!a) throw new Error("COMMITTEE_ADDRESS not set; run `pnpm deploy-contracts -- --committee`");
+  return w ? committeeRW(a, w) : committeeRO(a);
+}
+
+/** Is this arbitrator address a CommitteeArbitrator (has panelSize) or a single-key arbitrator? */
+export async function arbitratorKind(address: Address): Promise<"committee" | "single"> {
+  try {
+    await committeeRO(address).read.panelSize();
+    return "committee";
+  } catch {
+    return "single";
+  }
 }
 
 export const Status = {

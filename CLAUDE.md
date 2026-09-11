@@ -30,7 +30,9 @@ are pull-payments. Reputation counters accrue on-chain.
 ## Repo layout
 
 ```
-contracts/                 Foundry. src/EvalBounty.sol (market), src/CentralizedArbitrator.sol (ERC-792 arbiter),
+contracts/                 Foundry. src/EvalBounty.sol (market), src/CentralizedArbitrator.sol (single-key ERC-792 arbiter, no stake),
+                           src/CommitteeArbitrator.sol (sortitioned staked juror panel, commit-reveal, coherence slashing, no-slash zone;
+                           test/CommitteeArbitrator.t.sol 15 tests; see ARBITRATION.md),
                            src/interfaces/{IArbitrable,IArbitrator,IEvidence}.sol (vendored Kleros ERC-792/1497),
                            test/EvalBounty.t.sol (31 tests: lifecycle, timeouts, disputes, reentrancy, fuzz),
                            test/Fixtures.t.sol (cross-checks TS-generated Merkle proofs + sample indices),
@@ -50,7 +52,8 @@ agents/                    Node 20+/TypeScript (tsx, viem, vitest). pnpm workspa
   src/lib/chain.ts         viem clients, env, contract handles, tx helper, logging
   src/lib/abi.ts           GENERATED from contracts/out by `pnpm gen-abi` (do not edit)
   src/deploy.ts            deploys both contracts, funds agent wallets, writes .env + dashboard/config.js
-  src/seller.ts src/buyer.ts src/arbiter.ts   the three agents (event-driven loops)
+  src/seller.ts src/buyer.ts src/arbiter.ts   the three agents (event-driven loops); arbiter.ts exports evaluateDispute() shared with jurors
+  src/juror.ts             committee juror agent: stake, draw panel, rerun at JUROR_RUNS_MULTIPLIER, commit/reveal, execute (`pnpm jurors`)
   src/demo.ts              scripted end-to-end story on the configured chain (used for the video)
   src/e2e-anvil.ts         regression: fresh anvil → happy path, junk-seller rejection, out-of-band dispute
   test/*.test.ts           vitest unit tests for the libs
@@ -120,6 +123,9 @@ nonce++ until k distinct. Leaf = `keccak256(bytes.concat(keccak256(abi.encode(in
 - **Tolerance ≥ 2·SE.** Reruns are noisy on real models; SE from resampling (Miller 2024). Mock provider is
   deterministic so the demo reproduces exactly.
 - **Timeouts everywhere + 50/50 split if the arbiter is offline.** No party can lock funds.
+- **Arbitration is pluggable and the single-key arbiter is the weak one.** `CommitteeArbitrator` (ARBITRATION.md) removes
+  buyer influence over the judge (sortition by future blockhash) and gives judges stake to lose; `setArbitrator` switches a
+  live market. `deploy-contracts -- --committee [--switch]`, jurors via JUROR_KEYS + `pnpm jurors`, story `committee` in e2e/demo.
 - **Reputation does work off-chain first.** The buyer reads `sellerRep` before judging a sample and rejects on record
   when losses exceed successes (`assessSellerRecord`, env-tunable). On-chain reputation-scaled bonds are the next step
   (contract change); say plainly that per-address reputation is rotatable and the bond covers each single trade.

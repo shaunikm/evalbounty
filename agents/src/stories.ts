@@ -7,10 +7,12 @@
  *   easy    dishonest seller ships easy tasks but claims the band -> ClaimsFailed dispute -> arbiter rules for buyer
  *   bad     seller delivers garbage ciphertext -> BadDelivery dispute -> arbiter rules for buyer
  */
-import { bytesToHex, type Hex } from "viem";
+import { bytesToHex, type Address, type Hex } from "viem";
 import { arbitrate, arbiterRule, ensureArbiterPubKey } from "./arbiter.js";
-import { buyerJudge, buyerVerify, createBounty, type BuyerConfig } from "./buyer.js";
-import { DisputeKind, Status, StatusName, eth, evalBounty, log, short, tx, type Wallet } from "./lib/chain.js";
+import { buyerHandoffKeys, buyerJudge, buyerVerify, createBounty, type BuyerConfig } from "./buyer.js";
+import { switchArbitrator } from "./deploy.js";
+import { commitVote, decideVote, drawIfNeeded, ensureStaked, executeIfReady, revealVote } from "./juror.js";
+import { DisputeKind, Status, StatusName, committee, eth, evalBounty, log, short, tx, waitForBlockAfter, type Wallet } from "./lib/chain.js";
 import type { KeyPairHex } from "./lib/crypto.js";
 import type { ModelProvider } from "./lib/models.js";
 import { prepareBundle, sellerCommit, sellerDeliver, sellerReveal, sellerSalt, withdrawIfAny } from "./seller.js";
@@ -23,6 +25,9 @@ export interface Ctx {
   arbiter: Wallet;
   arbiterKp: KeyPairHex;
   cfg: BuyerConfig;
+  /** Sortitioned committee (optional): its address and the juror wallets this demo controls. */
+  committee?: Address;
+  jurors?: Wallet[];
 }
 
 export function expect(cond: unknown, msg: string): asserts cond {
@@ -134,7 +139,70 @@ export async function storyBadDelivery(ctx: Ctx) {
   return id;
 }
 
-export const STORIES = { happy: storyHappy, junk: storyJunk, easy: storyEasy, bad: storyBadDelivery } as const;
+/**
+ * Story 5: the same dishonest seller, but the market's arbitrator is a sortitioned, staked committee.
+ * The panel is drawn by the chain after the dispute exists; the buyer seals the bundle key to the
+ * drawn jurors; each juror reruns at higher precision, commits a hidden vote, reveals; the tally
+ * needs a two-thirds supermajority, coherent jurors share the fee, and the ruling reaches EvalBounty
+ * through the same ERC-792 callback as before. Leaves the market on the committee afterwards.
+ */
+export async function storyCommittee(ctx: Ctx) {
+  if (!ctx.committee || !ctx.jurors?.length) {
+    log("story", "━━ 5/5 committee: skipped (no COMMITTEE_ADDRESS / JUROR_KEYS)");
+    return -1n;
+  }
+  log("story", "━━ 5/5 sortitioned committee: nobody picks the judges, judges have stake at risk");
+  const cm = committee(ctx.committee);
+  const minStake = await cm.read.minStake();
+  for (const j of ctx.jurors) await ensureStaked(j, ctx.committee, minStake, "juror");
+  log("story", `${await cm.read.eligibleJurors()} eligible jurors, panel of ${await cm.read.panelSize()}, each staking ≥ ${eth(minStake)}; secured value ${eth(await cm.read.securedValue())}`);
+  if (await switchArbitrator(ctx.committee)) log("story", "market owner switched the ERC-792 arbitrator to the committee (one call, EvalBounty untouched)");
+
+  const id = await createBounty(ctx.buyer, ctx.cfg);
+  const spec = (await evalBounty().read.getBounty([id])).spec;
+  const { prepareBundle, sellerCommit, sellerDeliver, sellerReveal, sellerSalt } = await import("./seller.js");
+  const prep = await prepareBundle(spec, ctx.provider, { seed: `committee-${id}`, forceDifficulty: 1, who: "seller", saltFor: sellerSalt(ctx.seller, id) });
+  await sellerCommit(ctx.seller, id, prep);
+  await sellerReveal(ctx.seller, id, prep);
+  const j = await buyerJudge(ctx.buyer, id, ctx.provider);
+  expect(j.verdict.approve, "sample of easy-but-valid tasks passes");
+  await sellerDeliver(ctx.seller, id, prep);
+  const v = await buyerVerify(ctx.buyer, id, ctx.provider);
+  expect(v.verdict.action === "dispute" && v.verdict.kind === DisputeKind.ClaimsFailed, "expected ClaimsFailed dispute");
+  await expectStatus(id, Status.Disputed);
+
+  const b = await evalBounty().read.getBounty([id]);
+  const d0 = await cm.read.getDispute([b.disputeId]);
+  await waitForBlockAfter(d0[4], "juror");
+  const panel = await drawIfNeeded(ctx.jurors[0]!, ctx.committee, b.disputeId, "juror");
+  expect(panel.length === Number(await cm.read.panelSize()), "panel drawn");
+  expect(await buyerHandoffKeys(ctx.buyer, id), "buyer sealed the bundle key to the panel");
+
+  const onPanel = ctx.jurors.filter((w) => panel.map((a) => a.toLowerCase()).includes(w.account.address.toLowerCase()));
+  expect(onPanel.length === panel.length, `demo controls every drawn juror (${onPanel.length}/${panel.length})`);
+  const stakesBefore = new Map<string, bigint>();
+  for (const w of onPanel) {
+    stakesBefore.set(w.account.address, (await cm.read.jurorInfo([w.account.address]))[0]);
+    const decision = await decideVote(w, ctx.committee, b.disputeId, ctx.provider, "juror");
+    expect(decision !== undefined, "juror could evaluate");
+    log("juror", `${short(w.account.address)} votes ${["refuse", "seller", "buyer"][decision!.vote]}: ${decision!.why.slice(0, 100)}`);
+    await commitVote(w, ctx.committee, b.disputeId, decision!.vote, "juror");
+  }
+  for (const w of onPanel) await revealVote(w, ctx.committee, b.disputeId, "juror");
+  expect(await executeIfReady(ctx.jurors[0]!, ctx.committee, b.disputeId, "juror"), "tally executed");
+  await expectStatus(id, Status.Refunded);
+  const fee = await cm.read.jurorFee();
+  for (const w of onPanel) {
+    const stake = (await cm.read.jurorInfo([w.account.address]))[0];
+    expect(stake === stakesBefore.get(w.account.address), "coherent juror keeps full stake");
+    expect((await cm.read.pending([w.account.address])) === fee, "coherent juror earns its fee share");
+  }
+  log("story", `unanimous panel: nobody slashed, each juror earned ${eth(fee)}; the dishonest seller's bond went to the buyer`);
+  await withdrawIfAny(ctx.buyer, "buyer");
+  return id;
+}
+
+export const STORIES = { happy: storyHappy, junk: storyJunk, easy: storyEasy, bad: storyBadDelivery, committee: storyCommittee } as const;
 export type StoryName = keyof typeof STORIES;
 
 export async function reputationSummary(ctx: Ctx) {

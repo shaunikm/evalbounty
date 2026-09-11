@@ -28,7 +28,7 @@ Reputation counters (commits, rejected samples, abandoned commits, deliveries, t
 
 ## 3. Trust assumptions
 
-- **The arbitrator is a single bonded party** (a `CentralizedArbitrator` implementing Kleros' ERC-792 interface). It only touches funds during a dispute; a missed ruling deadline splits the reward 50/50 and returns bonds. Production would plug in a court, a committee, or TEE-attested reruns through the same interface.
+- **Arbitration is pluggable (ERC-792) and comes in two implementations.** `CentralizedArbitrator` is a single key with *no* stake, adequate for a demo and vulnerable to a buyer who controls or knows that key. `CommitteeArbitrator` fixes both halves of that weakness: the panel is drawn from a staked juror pool by the hash of the block after the dispute exists, so nobody picks the judges; votes are commit–reveal; jurors who vote against a two-thirds supermajority lose stake to those who voted with it; if no supermajority forms, the ruling is "refused" (50/50 split) and nobody is slashed, which is how near-deterministic model inference is handled. Switching a live market is one owner call. Full threat model and economics in [ARBITRATION.md](ARBITRATION.md). Either way the arbitrator only touches funds during a dispute, and a missed ruling deadline splits the reward and returns bonds.
 - **The model provider is a faithful oracle** for the pinned snapshot and sees the prompts. Reruns are noisy, so claims are bands with a tolerance the buyer sets ≥ 2·SE (Miller, *Adding Error Bars to Evals*, 2024). `MODEL_PROVIDER=mock` is a deterministic keyless provider used by the tests; the Sepolia demo runs `MODEL_PROVIDER=openai` with pinned snapshots `gpt-4.1-nano-2025-04-14` (weak, no reasoning) and `gpt-5-nano-2025-08-07` (strong, reasoning at low effort), the cheapest pair with a real capability gap. Paid providers are wrapped in a per-process call budget (`MODEL_CALL_BUDGET`, default 3000) so no loop or hostile counterparty can drain credits.
 - **`blockhash` is an unbiased source of randomness at demo stakes.** A block proposer can bias it by one bit; at higher stakes use a VRF. This is also why the contract lives on Sepolia L1: Arbitrum documents its blockhash as "cryptographically insecure, pseudo-random" and returns a constant for `prevrandao`.
 - **Buyers can resell after purchase.** Exclusivity is a contract term backed by reputation, not cryptography.
@@ -36,6 +36,10 @@ Reputation counters (commits, rejected samples, abandoned commits, deliveries, t
 ## 4. Biggest design decision
 
 **The buyer declares a machine-checkable definition of value *before* disclosure, and the market only enforces that definition.** Difficulty on pinned models is verifiable by rerunning; whether tasks are meaningful is *sampled* (commit → blockhash-chosen reveal → Merkle proofs, so a bundle with junk fraction *f* survives a *k*-sample only with probability (1−f)^k); secrecy after sale is reputational. Everything the contract enforces, it can actually check; everything it cannot check is either sampled or priced (bonds, penalties, reputation). We deliberately did not try to verify "usefulness" on-chain or with ZK: the predicate "model X scores Y" has no circuit, so we use optimistic verification in the spirit of FairSwap (cheap happy path, reruns only on dispute).
+
+## 4b. Why the judges can be trusted at all
+
+The buyer cannot pick the arbitrator. With the committee, it cannot even know who the arbitrator will be: the panel is sortitioned by a future block hash from jurors who staked before the dispute existed, each juror reruns the claims at higher precision than the buyer did, and a juror that votes against the reproducible truth loses stake. Cryptographic verification of the model calls themselves is impossible for closed API models (no weights to prove over), which is why the yardstick models a buyer pins are a security parameter: open-weight yardsticks would let an opML or zkML arbitrator take the committee's place behind the same interface. Details, including the cost-of-corruption sizing rule `securedValue()`, are in [ARBITRATION.md](ARBITRATION.md).
 
 ## 5. One important limitation
 
@@ -46,9 +50,9 @@ Reputation counters (commits, rejected samples, abandoned commits, deliveries, t
 ```bash
 brew install foundry            # or foundryup
 pnpm install && git submodule update --init --recursive
-forge test --root contracts     # 33 tests: lifecycle, timeouts, disputes, reentrancy, fuzz, TS↔Solidity fixtures
+forge test --root contracts     # 48 tests: lifecycle, timeouts, disputes, reentrancy, fuzz, TS↔Solidity fixtures, committee sortition/voting/slashing
 pnpm --filter agents test       # vitest: canonical bytes, graders, Merkle, crypto, generators, verification
-pnpm --filter agents e2e        # fresh anvil → happy path, junk seller rejected, claims dispute, bad delivery dispute
+pnpm --filter agents e2e        # fresh anvil → happy path, junk seller rejected, claims dispute, bad delivery dispute, committee-arbitrated dispute
 ```
 
 Sepolia: `./scripts/set-keys.sh` puts any keys into `agents/.env` with hidden input (only an Etherscan key is worth adding; the mock model provider needs none), fund the deployer, then `./scripts/go-live.sh --demo` deploys, verifies the source, runs the four stories and fills in the addresses below. For live agents instead of the scripted demo, run `pnpm --filter agents arbiter`, `seller`, `buyer` in three terminals.
@@ -75,6 +79,7 @@ What is *not* viable: proving model performance in zero knowledge. The pinned mo
 | | `RPC_URL`, `EVALBOUNTY_ADDRESS`, `ARBITRATOR_ADDRESS`, `DEPLOY_BLOCK` | written by `deploy-contracts`; point agents at any deployment |
 | | `MODEL_PROVIDER` | `auto` (route each model id to its vendor: `claude-*` → Anthropic, `gpt-*`/`o*` → OpenAI, `mock-*` → mock), or `mock` to force the keyless mock |
 | | `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `MODEL_CALL_BUDGET`, `OPENAI_REASONING_EFFORT` | vendor keys, per-process spend cap (default 3000 calls), reasoning effort |
+| | `COMMITTEE_ADDRESS`, `JUROR_KEYS`, `JUROR_RUNS_MULTIPLIER`, `BUYER_ENFORCE_SECURITY`, `BUYER_REWARD_ETH` | committee arbitrator, juror wallets (`pnpm --filter agents jurors`), juror rerun precision, refuse bounties the stake cannot secure, demo reward size |
 | | `SELLER_DOMAINS`, `BUYER_DOMAIN`, `TASK_SOURCE` | domains a seller serves; the buyer's domain tag; `real` (BBH + GSM8K snapshots) or `synthetic` |
 | Dashboard URL | `?contract=0x…&chain=11155111&from=<deployBlock>&rpc=…` | inspect any EvalBounty deployment on any chain; overrides `config.js` |
 | Vercel env | `EVALBOUNTY_ADDRESS`, `ARBITRATOR_ADDRESS`, `DEPLOY_BLOCK`, `CHAIN_ID`, `RPC_URL` | `dashboard/build-config.mjs` writes `config.js` at build time when set |
@@ -87,6 +92,6 @@ OpenZeppelin `MerkleProof` + `@openzeppelin/merkle-tree` (leaf format `keccak256
 
 ## Layout
 
-`contracts/` Foundry (EvalBounty, CentralizedArbitrator, tests) · `agents/` TypeScript buyer/seller/arbiter + libs + e2e · `dashboard/` static app (Vercel) · `scripts/` set-keys, go-live, verify, check-no-secrets · `CLAUDE.md` architecture notes.
+`contracts/` Foundry (EvalBounty, CentralizedArbitrator, CommitteeArbitrator, tests) · `agents/` TypeScript buyer/seller/arbiter + libs + e2e · `dashboard/` static app (Vercel) · `scripts/` set-keys, go-live, verify, check-no-secrets · `CLAUDE.md` architecture notes.
 
 Deployed on Sepolia at block 11679290. Source is verified on [Etherscan](https://sepolia.etherscan.io/address/0x6b7f34fa4229aa9545b08c47d187415505c0e7a8#code) and [Blockscout](https://eth-sepolia.blockscout.com/address/0x6b7f34fa4229aa9545b08c47d187415505c0e7a8?tab=contract).

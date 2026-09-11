@@ -102,6 +102,26 @@ penalty once the sample was knowable).
   `sealedK = crypto_box_seal(K, arbiterPubKey)` and `arbiterPubKey` is read from
   `CentralizedArbitrator.arbiterPubKey()`.
 
+## Committee arbitration (when `EvalBounty.arbitrator()` is a `CommitteeArbitrator`)
+
+Detect it by calling `panelSize()` on the arbitrator address. Then:
+
+- Jurors: `stake(bytes32 x25519PubKey)` with at least `minStake()`; the reference juror derives its key
+  as BLAKE2b(wallet secret, `evalbounty/v1/juror/<chainId>/<committee>/<jurorAddr>`).
+- Dispute lifecycle on the committee: `createDispute` (called by the market) → anyone `drawPanel(id)` once
+  `block.number > sortitionBlock` → panel jurors `commitVote(id, keccak256(abi.encode(id, vote, salt, juror)))`
+  before `commitBy` → `revealVote(id, vote, salt)` after `commitBy` or once all committed → anyone
+  `execute(id)` after `revealBy` or once all revealed. Votes: 1 seller, 2 buyer, 0 too close to call.
+- ClaimsFailed evidence in `EvalBounty.dispute` is `abi.encode(bytes "", bytes32 transcriptHash)` (no
+  sealed key yet). After the panel is drawn the buyer calls
+  `submitKeys(disputeId, bountyId, bytes[] sealedKeys)` with `crypto_box_seal(K, jurorPubKey_i)` in
+  panel order. Jurors read `KeysSubmitted`. No handoff → jurors vote 1 (buyer failed to substantiate).
+- Ruling: a vote held by ≥ ⌈2m/3⌉ jurors; otherwise 0. Incoherent or silent jurors lose `slashBps` of
+  stake to the coherent ones, who also share `arbitrationCost = m · jurorFee`. Without a supermajority,
+  nobody is slashed and revealers share the fee.
+- `securedValue()` = ⌈2m/3⌉ · minStake · slashBps / lambda is the largest `reward + sellerBond` the pool
+  secures; buyers should not post above it.
+
 ## Claims and scoring
 
 `score(model) = mean over tasks of mean over runs of grader(answer) ∈ {0,1}`, in basis points, with the

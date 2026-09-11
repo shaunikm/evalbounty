@@ -25,7 +25,26 @@ export interface Decision {
   evidence: string;
 }
 
-export async function arbitrate(id: bigint, provider: ModelProvider, arbiterKp: KeyPairHex, who = "arbiter"): Promise<Decision> {
+export interface EvaluateOptions {
+  /** Arbitrator X25519 key used to open the sealed bundle key in the dispute evidence (single-arbiter mode). */
+  kp?: KeyPairHex;
+  /** Bundle key already in hand (committee juror mode: the buyer sealed it to this juror after sortition). */
+  bundleKey?: Uint8Array;
+  /** Rerun with this many times the buyer's runs; disputes are rare, precision is cheap where it matters. */
+  runsMultiplier?: number;
+  /** Return ruling 0 when the deciding margin is within two standard errors of the band edge. */
+  tooCloseToCall?: boolean;
+  who?: string;
+}
+
+/**
+ * Reproduce the buyer's check and decide a ruling. Shared by the single arbiter and every juror.
+ *   BadDelivery  -> evidence is the buyer's X25519 secret; it must derive the on-chain buyer key.
+ *   ClaimsFailed -> needs the bundle key (sealed in the evidence for a single arbiter, handed over
+ *                   via CommitteeArbitrator.submitKeys for jurors); rerun the claims.
+ */
+export async function evaluateDispute(id: bigint, provider: ModelProvider, opts: EvaluateOptions = {}): Promise<Decision> {
+  const who = opts.who ?? "arbiter";
   const c = evalBounty();
   const b = await c.read.getBounty([id]);
   const d = await latestDispute(id);
@@ -38,10 +57,13 @@ export async function arbitrate(id: bigint, provider: ModelProvider, arbiterKp: 
     log(who, `ruling for the SELLER: ${why}`);
     return { ruling: Ruling.Seller, evidence: JSON.stringify({ ruling: "seller", why, ...extra }) };
   };
+  const refuse = (why: string, extra: Record<string, unknown> = {}): Decision => {
+    log(who, `REFUSING to rule (too close to call): ${why}`);
+    return { ruling: Ruling.Refused, evidence: JSON.stringify({ ruling: "refused", why, ...extra }) };
+  };
 
   if (d.kind === DisputeKind.BadDelivery) {
     log(who, `#${id} BadDelivery dispute: buyer published its X25519 secret; anyone can redo this check`);
-    // The evidence must be THE buyer's key: a wrong secret would make any good ciphertext "fail to open".
     let derived: Hex;
     try {
       derived = await publicKeyFromSecret(d.evidence);
@@ -71,18 +93,21 @@ export async function arbitrate(id: bigint, provider: ModelProvider, arbiterKp: 
   }
 
   // ClaimsFailed
-  log(who, `#${id} ClaimsFailed dispute: opening the bundle key sealed to me (bundle stays private)`);
   const [sealedHex, buyerTranscriptHash] = decodeAbiParameters([{ type: "bytes" }, { type: "bytes32" }], d.evidence);
-  let key: Uint8Array;
-  try {
-    key = await openSealedKey(Buffer.from(sealedHex.slice(2), "hex"), arbiterKp);
-  } catch (e) {
-    const legacy = legacyArbiterKeys();
+  let key: Uint8Array | undefined = opts.bundleKey;
+  if (!key) {
+    if (sealedHex === "0x" || !opts.kp) return forSeller("no bundle key was made available to this arbitrator; the buyer failed to substantiate the dispute");
+    log(who, `#${id} ClaimsFailed dispute: opening the bundle key sealed to me (bundle stays private)`);
     try {
-      if (!legacy) throw e;
-      key = await openSealedKey(Buffer.from(sealedHex.slice(2), "hex"), legacy);
-    } catch {
-      return forSeller(`buyer's evidence does not open for the arbiter (${(e as Error).message}); cannot substantiate the dispute`);
+      key = await openSealedKey(Buffer.from(sealedHex.slice(2), "hex"), opts.kp);
+    } catch (e) {
+      const legacy = legacyArbiterKeys();
+      try {
+        if (!legacy) throw e;
+        key = await openSealedKey(Buffer.from(sealedHex.slice(2), "hex"), legacy);
+      } catch {
+        return forSeller(`buyer's evidence does not open for the arbitrator (${(e as Error).message}); cannot substantiate the dispute`);
+      }
     }
   }
   let plaintext: Uint8Array;
@@ -97,14 +122,34 @@ export async function arbitrate(id: bigint, provider: ModelProvider, arbiterKp: 
   if ((buildTaskTree(bundle.tasks).root as Hex) !== b.taskRoot) return forBuyer("Merkle root mismatch");
   if (runParamsHash(bundle.runParams) !== b.spec.runParamsHash) return forBuyer("run params differ from the pinned hash");
   const claim = toClaimSpec(b.spec);
-  log(who, `re-running ${claim.weakModel} / ${claim.strongModel} x ${claim.runs} on ${bundle.tasks.length} tasks with the committed run params…`);
+  const mult = Math.max(1, Math.round(opts.runsMultiplier ?? 1));
+  claim.runs = claim.runs * mult;
+  log(who, `re-running ${claim.weakModel} / ${claim.strongModel} x ${claim.runs} runs on ${bundle.tasks.length} tasks with the committed run params${mult > 1 ? ` (${mult}x the buyer's precision)` : ""}…`);
   const t = await measureBundle(bundle, claim, provider, commitment, { onProgress: ttyProgress(who) });
   const s = t.scores;
   const v = claimsHold(s, claim);
   const th = transcriptHash(t);
-  log(who, `arbiter measured weak ${fmt(s.weak)} strong ${fmt(s.strong)} null ${fmt(s.null)}; transcript ${short(th)} (buyer's: ${short(buyerTranscriptHash)}${th === buyerTranscriptHash ? ", identical" : ""})`);
-  const extra = { transcriptHash: th, buyerTranscriptHash, scores: s, band: { weakMax: claim.weakMaxBps, strongMin: claim.strongMinBps, nullMax: claim.nullMaxBps, tol: claim.toleranceBps } };
+  log(who, `${who} measured weak ${fmt(s.weak)} strong ${fmt(s.strong)} null ${fmt(s.null)}; transcript ${short(th)} (buyer's: ${short(buyerTranscriptHash)}${th === buyerTranscriptHash ? ", identical" : ""})`);
+  const extra = { transcriptHash: th, buyerTranscriptHash, scores: s, runs: claim.runs, band: { weakMax: claim.weakMaxBps, strongMin: claim.strongMinBps, nullMax: claim.nullMaxBps, tol: claim.toleranceBps } };
+  if (opts.tooCloseToCall) {
+    // Near-deterministic inference: if the deciding margin sits inside two standard errors of the
+    // band edge, honest jurors could split on noise alone. Refuse rather than slash honesty.
+    const margins = [
+      { name: "weak", margin: claim.weakMaxBps + claim.toleranceBps - s.weak, se: t.standardErrorBps.weak },
+      { name: "strong", margin: s.strong - (claim.strongMinBps - claim.toleranceBps), se: t.standardErrorBps.strong },
+    ];
+    const close = margins.filter((x) => Math.abs(x.margin) < 2 * Math.max(x.se, 25)); // floor SE at 0.25 pt
+    const decisive = margins.filter((x) => x.margin < 0 && !close.some((y) => y.name === x.name));
+    if (decisive.length === 0 && close.length > 0) {
+      return refuse(close.map((x) => `${x.name} margin ${fmt(x.margin)} within 2·SE (${fmt(2 * x.se)}) of the band edge`).join("; "), extra);
+    }
+  }
   return v.ok ? forSeller("claims reproduce within tolerance", extra) : forBuyer(v.reasons.join("; "), extra);
+}
+
+/** Single-arbitrator mode: open the sealed key with our own X25519 key. */
+export async function arbitrate(id: bigint, provider: ModelProvider, arbiterKp: KeyPairHex, who = "arbiter"): Promise<Decision> {
+  return evaluateDispute(id, provider, { kp: arbiterKp, who });
 }
 
 /** Publish the derived X25519 key on the arbitrator contract if it differs (owner-only, idempotent). */

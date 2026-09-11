@@ -8,7 +8,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { parseEther, type Address, type Hex } from "viem";
-import { arbitratorAbi, arbitratorBytecode, evalBountyAbi, evalBountyBytecode } from "./lib/abi.js";
+import { arbitratorAbi, arbitratorBytecode, committeeAbi, committeeBytecode, evalBountyAbi, evalBountyBytecode } from "./lib/abi.js";
 import { AGENTS_DIR, REPO_DIR, STATE_DIR, chain, env, eth, explorer, log, publicClient, wallet, type KeyName } from "./lib/chain.js";
 import { deriveKeyPair, type KeyPairHex } from "./lib/crypto.js";
 
@@ -74,6 +74,50 @@ export async function fundAgents(deployer = wallet(env.key("DEPLOYER_KEY"))) {
     await pc.waitForTransactionReceipt({ hash });
     log("deploy", `funded ${f.name} ${addr} +${eth(amount)}${amount < want ? `  (short by ${eth(want - amount)})` : ""}`);
   }
+}
+
+/** Committee parameters. Anvil values secure the demo reward with real margin; Sepolia values are testnet-sized. */
+export function committeeParams() {
+  const anvil = env.chainName === "anvil";
+  return {
+    minStake: parseEther(process.env.COMMITTEE_MIN_STAKE ?? (anvil ? "1" : "0.0015")),
+    jurorFee: parseEther(process.env.COMMITTEE_JUROR_FEE ?? (anvil ? "0.01" : "0.0001")),
+    panelSize: Number(process.env.COMMITTEE_PANEL ?? 3),
+    commitWindow: BigInt(process.env.COMMITTEE_COMMIT_WINDOW ?? (anvil ? 120 : 10 * 60)),
+    revealWindow: BigInt(process.env.COMMITTEE_REVEAL_WINDOW ?? (anvil ? 120 : 10 * 60)),
+    slashBps: Number(process.env.COMMITTEE_SLASH_BPS ?? 2000),
+    lambda: Number(process.env.COMMITTEE_LAMBDA ?? 2),
+  };
+}
+
+/** Deploy a CommitteeArbitrator owned by the deployer. Does not switch the market; see switchArbitrator. */
+export async function deployCommittee(opts: { persist?: boolean } = {}): Promise<Address> {
+  const pc = publicClient();
+  const deployer = wallet(env.key("DEPLOYER_KEY"));
+  const p = committeeParams();
+  const h = await deployer.deployContract({
+    abi: committeeAbi,
+    bytecode: committeeBytecode as Hex,
+    args: [deployer.account.address, p.minStake, p.jurorFee, p.panelSize, p.commitWindow, p.revealWindow, p.slashBps, p.lambda],
+  });
+  const r = await pc.waitForTransactionReceipt({ hash: h });
+  const address = r.contractAddress as Address;
+  log("deploy", `CommitteeArbitrator at ${address} (panel ${p.panelSize}, minStake ${eth(p.minStake)}, fee ${eth(p.jurorFee)}/juror, slash ${p.slashBps / 100}%)  ${explorer.tx(h)}`);
+  process.env.COMMITTEE_ADDRESS = address;
+  if (opts.persist ?? true) setEnvVar(resolve(AGENTS_DIR, ".env"), "COMMITTEE_ADDRESS", address);
+  return address;
+}
+
+/** Point the live market at a different ERC-792 arbitrator (owner only). Bounties already in dispute keep theirs. */
+export async function switchArbitrator(to: Address) {
+  const deployer = wallet(env.key("DEPLOYER_KEY"));
+  const { evalBounty } = await import("./lib/chain.js");
+  const c = evalBounty(deployer);
+  const current = (await c.read.arbitrator()) as Address;
+  if (current.toLowerCase() === to.toLowerCase()) return false;
+  const { tx } = await import("./lib/chain.js");
+  await tx("deploy", `setArbitrator(${to})`, () => c.write.setArbitrator([to]));
+  return true;
 }
 
 export interface Deployment {
@@ -153,7 +197,13 @@ window.EVALBOUNTY_CONFIG = {
 }
 
 if (process.argv[1] && /deploy\.ts$/.test(process.argv[1])) {
-  const run = process.argv.includes("--fund-only") ? fundAgents() : deploy();
+  const run = process.argv.includes("--fund-only")
+    ? fundAgents()
+    : process.argv.includes("--committee")
+      ? deployCommittee().then(async (a) => {
+          if (process.argv.includes("--switch")) await switchArbitrator(a);
+        })
+      : deploy();
   run.catch((e) => {
     console.error(e);
     process.exit(1);
