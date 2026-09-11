@@ -150,6 +150,12 @@ function label(a) {
 
 const chain = Object.values(chains).find((c) => c && typeof c === "object" && c.id === cfg.chainId) ?? chains.sepolia;
 const client = createPublicClient({ chain, transport: http(cfg.rpcUrl) });
+// multicall3 where the chain has it (Sepolia), plain reads otherwise (local anvil).
+async function readMany(contracts) {
+  if (!contracts.length) return [];
+  if (chain.contracts?.multicall3) return client.multicall({ contracts });
+  return Promise.all(contracts.map((c) => client.readContract(c).then((result) => ({ status: "success", result })).catch((error) => ({ status: "failure", error }))));
+}
 const expanded = new Set();
 let lastRender = 0;
 
@@ -192,7 +198,7 @@ async function refresh() {
     await Promise.all(uniqBlocks.map(async bn => { const b = await client.getBlock({ blockNumber: BigInt(bn) }); blockTimes[bn] = Number(b.timestamp); }));
 
     const count = Number(await client.readContract({ address: cfg.contractAddress, abi, functionName: "bountyCount" }));
-    const bounties = count ? await client.multicall({ contracts: Array.from({length: count}, (_, i) => ({ address: cfg.contractAddress, abi, functionName: "getBounty", args: [BigInt(i)] })) }) : [];
+    const bounties = await readMany(Array.from({length: count}, (_, i) => ({ address: cfg.contractAddress, abi, functionName: "getBounty", args: [BigInt(i)] })));
 
     const byId = {};
     for (const e of events) { const id = e.args?.id?.toString(); if (id !== undefined) (byId[id] ??= []).push(e); }
@@ -233,8 +239,8 @@ async function refresh() {
     const sellers = [...new Set(events.filter(e => e.eventName === "Committed").map(e => e.args.seller))];
     const buyers = [...new Set(events.filter(e => e.eventName === "BountyCreated").map(e => e.args.buyer))];
     const [srep, brep] = await Promise.all([
-      sellers.length ? client.multicall({ contracts: sellers.map(a => ({ address: cfg.contractAddress, abi, functionName: "sellerRep", args: [a] })) }) : [],
-      buyers.length ? client.multicall({ contracts: buyers.map(a => ({ address: cfg.contractAddress, abi, functionName: "buyerRep", args: [a] })) }) : [],
+      readMany(sellers.map(a => ({ address: cfg.contractAddress, abi, functionName: "sellerRep", args: [a] }))),
+      readMany(buyers.map(a => ({ address: cfg.contractAddress, abi, functionName: "buyerRep", args: [a] }))),
     ]);
     $("#sellers tbody").innerHTML = sellers.map((a, i) => { const r = srep[i].result ?? []; return `<tr><td>${addrLink(a)}</td>${r.slice(0,8).map(v => `<td class="mono">${v}</td>`).join("")}<td class="mono">${eth(r[8] ?? 0n)}</td></tr>`; }).join("") || `<tr><td colspan="10" class="empty">no sellers yet</td></tr>`;
     $("#buyers tbody").innerHTML = buyers.map((a, i) => { const r = brep[i].result ?? []; return `<tr><td>${addrLink(a)}</td>${r.map(v => `<td class="mono">${v}</td>`).join("")}</tr>`; }).join("") || `<tr><td colspan="5" class="empty">no buyers yet</td></tr>`;
