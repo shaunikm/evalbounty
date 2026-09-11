@@ -1,0 +1,145 @@
+{
+  "fetchedAt": "2026-09-11T04:39:10.294Z",
+  "sources": [
+    {
+      "name": "bbh/boolean_expressions",
+      "url": "https://raw.githubusercontent.com/suzgunmirac/BIG-Bench-Hard/main/bbh/boolean_expressions.json",
+      "sha256": "ea6c754ec005e2d3f2d085d349a740f593b5764f32ea4638ffed4cfc0061b12a",
+      "items": 250,
+      "license": "MIT (suzgunmirac/BIG-Bench-Hard)"
+    },
+    {
+      "name": "bbh/date_understanding",
+      "url": "https://raw.githubusercontent.com/suzgunmirac/BIG-Bench-Hard/main/bbh/date_understanding.json",
+      "sha256": "0148d4ac5fca05b2f82373e5fef7208e15363b9c6079493034d77b3dab496bf5",
+      "items": 250,
+      "license": "MIT (suzgunmirac/BIG-Bench-Hard)"
+    },
+    {
+      "name": "bbh/multistep_arithmetic_two",
+      "url": "https://raw.githubusercontent.com/suzgunmirac/BIG-Bench-Hard/main/bbh/multistep_arithmetic_two.json",
+      "sha256": "c9d5a6433c9b78256422a15c78463949c8bec8d85607aa28b52d7234ad4a8595",
+      "items": 250,
+      "license": "MIT (suzgunmirac/BIG-Bench-Hard)"
+    },
+    {
+      "name": "bbh/navigate",
+      "url": "https://raw.githubusercontent.com/suzgunmirac/BIG-Bench-Hard/main/bbh/navigate.json",
+      "sha256": "b7944dfd3c81da5c4815bd75b00d6fa3c64140823498e78ed496f4c3d36f7f0d",
+      "items": 250,
+      "license": "MIT (suzgunmirac/BIG-Bench-Hard)"
+    },
+    {
+      "name": "bbh/object_counting",
+      "url": "https://raw.githubusercontent.com/suzgunmirac/BIG-Bench-Hard/main/bbh/object_counting.json",
+      "sha256": "8acef14dbbdd40d2326ef7755750b6b5fe919fef06276af1bab3f1c297f022ff",
+      "items": 250,
+      "license": "MIT (suzgunmirac/BIG-Bench-Hard)"
+    },
+    {
+      "name": "bbh/sports_understanding",
+      "url": "https://raw.githubusercontent.com/suzgunmirac/BIG-Bench-Hard/main/bbh/sports_understanding.json",
+      "sha256": "63ca262858f6176864515cd8cf53cdaa40839ebecc155b726d77930855d167bf",
+      "items": 250,
+      "license": "MIT (suzgunmirac/BIG-Bench-Hard)"
+    },
+    {
+      "name": "bbh/word_sorting",
+      "url": "https://raw.githubusercontent.com/suzgunmirac/BIG-Bench-Hard/main/bbh/word_sorting.json",
+      "sha256": "2a6132d2c99f00d0d2eb1113ac6b4a918bd969d863c48749210d969713db8d43",
+      "items": 250,
+      "license": "MIT (suzgunmirac/BIG-Bench-Hard)"
+    },
+    {
+      "name": "bbh/tracking_shuffled_objects_three_objects",
+      "url": "https://raw.githubusercontent.com/suzgunmirac/BIG-Bench-Hard/main/bbh/tracking_shuffled_objects_three_objects.json",
+      "sha256": "546cc7bf10c6a01a6a4c17ae28a4966485f21f29fd5d111f37858ec78e354f6b",
+      "items": 250,
+      "license": "MIT (suzgunmirac/BIG-Bench-Hard)"
+    },
+    {
+      "name": "bbh/logical_deduction_three_objects",
+      "url": "https://raw.githubusercontent.com/suzgunmirac/BIG-Bench-Hard/main/bbh/logical_deduction_three_objects.json",
+      "sha256": "e590fae72e3a6041fbd23bd8ff6b74baf44ca563f6ba40a041c55e7b867c1681",
+      "items": 250,
+      "license": "MIT (suzgunmirac/BIG-Bench-Hard)"
+    },
+    {
+      "name": "bbh/temporal_sequences",
+      "url": "https://raw.githubusercontent.com/suzgunmirac/BIG-Bench-Hard/main/bbh/temporal_sequences.json",
+      "sha256": "92a1189faaa84aacc4c405aaa13f13f48c2992eb884772eedb622505252baef5",
+      "items": 250,
+      "license": "MIT (suzgunmirac/BIG-Bench-Hard)"
+    },
+    {
+      "name": "bbh/web_of_lies",
+      "url": "https://raw.githubusercontent.com/suzgunmirac/BIG-Bench-Hard/main/bbh/web_of_lies.json",
+      "sha256": "3e60323f8514a107fdb4edf35f8832a9171c5a09c0eaa47823559de905e8ab8b",
+      "items": 250,
+      "license": "MIT (suzgunmirac/BIG-Bench-Hard)"
+    },
+    {
+      "name": "bbh/reasoning_about_colored_objects",
+      "url": "https://raw.githubusercontent.com/suzgunmirac/BIG-Bench-Hard/main/bbh/reasoning_about_colored_objects.json",
+      "sha256": "0a8850cf95166020fce7a78244026ceedd7ea839302471512b4f8744e85a6a49",
+      "items": 250,
+      "license": "MIT (suzgunmirac/BIG-Bench-Hard)"
+    },
+    {
+      "name": "bbh/formal_fallacies",
+      "url": "https://raw.githubusercontent.com/suzgunmirac/BIG-Bench-Hard/main/bbh/formal_fallacies.json",
+      "sha256": "4c1adb664821157faade1d4153685403afcc02648f3c180a608a18f17f589629",
+      "items": 250,
+      "license": "MIT (suzgunmirac/BIG-Bench-Hard)"
+    },
+    {
+      "name": "bbh/tracking_shuffled_objects_five_objects",
+      "url": "https://raw.githubusercontent.com/suzgunmirac/BIG-Bench-Hard/main/bbh/tracking_shuffled_objects_five_objects.json",
+      "sha256": "2063a46a4fb484236ed4310523606543a3e1dd4a4dc34eda65d407910ece25a5",
+      "items": 250,
+      "license": "MIT (suzgunmirac/BIG-Bench-Hard)"
+    },
+    {
+      "name": "bbh/tracking_shuffled_objects_seven_objects",
+      "url": "https://raw.githubusercontent.com/suzgunmirac/BIG-Bench-Hard/main/bbh/tracking_shuffled_objects_seven_objects.json",
+      "sha256": "b59fd05b850c37cf57cb514ae1e6975c00b1638ade2291722056b2af3c54084d",
+      "items": 250,
+      "license": "MIT (suzgunmirac/BIG-Bench-Hard)"
+    },
+    {
+      "name": "bbh/logical_deduction_five_objects",
+      "url": "https://raw.githubusercontent.com/suzgunmirac/BIG-Bench-Hard/main/bbh/logical_deduction_five_objects.json",
+      "sha256": "d2df31394b903b7f0e085d42a69572a092987856eac076799017d70ef266fa8f",
+      "items": 250,
+      "license": "MIT (suzgunmirac/BIG-Bench-Hard)"
+    },
+    {
+      "name": "bbh/logical_deduction_seven_objects",
+      "url": "https://raw.githubusercontent.com/suzgunmirac/BIG-Bench-Hard/main/bbh/logical_deduction_seven_objects.json",
+      "sha256": "2896c7e3482eea318dd37bcc370d24ec3cc91e8374c1784287b5dbd38a529e33",
+      "items": 250,
+      "license": "MIT (suzgunmirac/BIG-Bench-Hard)"
+    },
+    {
+      "name": "bbh/dyck_languages",
+      "url": "https://raw.githubusercontent.com/suzgunmirac/BIG-Bench-Hard/main/bbh/dyck_languages.json",
+      "sha256": "3f9badedf15c2be1ce53d94fdf016299bb30ba231ef087ab9f51a7ed6d0bdc25",
+      "items": 250,
+      "license": "MIT (suzgunmirac/BIG-Bench-Hard)"
+    },
+    {
+      "name": "bbh/geometric_shapes",
+      "url": "https://raw.githubusercontent.com/suzgunmirac/BIG-Bench-Hard/main/bbh/geometric_shapes.json",
+      "sha256": "07be68a124420caa2ebc0b2c858ad79fc55c5c8806170e496e1e17ebfb11f31c",
+      "items": 250,
+      "license": "MIT (suzgunmirac/BIG-Bench-Hard)"
+    },
+    {
+      "name": "gsm8k/test",
+      "url": "https://raw.githubusercontent.com/openai/grade-school-math/master/grade_school_math/data/test.jsonl",
+      "sha256": "3730d312f6e3440559ace48831e51066acaca737f6eabec99bccb9e4b3c39d14",
+      "items": 1319,
+      "license": "MIT (openai/grade-school-math)"
+    }
+  ]
+}

@@ -10,7 +10,7 @@ import { defaultBuyerConfig } from "./buyer.js";
 import { loadOrCreateArbiterKeys } from "./deploy.js";
 import { env, eth, evalBounty, explorer, log, publicClient, wallet } from "./lib/chain.js";
 import { getProvider } from "./lib/models.js";
-import { STORIES, reputationSummary, type StoryName } from "./stories.js";
+import { STORIES, prepareArbiter, reputationSummary, type StoryName } from "./stories.js";
 
 const only = process.argv.find((a) => a.startsWith("--story="))?.split("=")[1] as StoryName | undefined;
 const names = only ? [only] : (Object.keys(STORIES) as StoryName[]);
@@ -31,6 +31,7 @@ log("demo", `chain=${env.chainName} EvalBounty=${explorer.address(c.address)} pr
 for (const [name, w] of Object.entries({ buyer: ctx.buyer, seller: ctx.seller, junk: ctx.junk, arbiter: ctx.arbiter })) {
   log("demo", `${name.padEnd(7)} ${w.account.address} ${eth(await publicClient().getBalance({ address: w.account.address }))}`);
 }
+await prepareArbiter(ctx);
 for (const name of names) {
   const t = Date.now();
   const id = await STORIES[name](ctx);

@@ -8,12 +8,12 @@
  *   bad     seller delivers garbage ciphertext -> BadDelivery dispute -> arbiter rules for buyer
  */
 import { bytesToHex, type Hex } from "viem";
-import { arbitrate, arbiterRule } from "./arbiter.js";
+import { arbitrate, arbiterRule, ensureArbiterPubKey } from "./arbiter.js";
 import { buyerJudge, buyerVerify, createBounty, type BuyerConfig } from "./buyer.js";
 import { DisputeKind, Status, StatusName, eth, evalBounty, log, short, tx, type Wallet } from "./lib/chain.js";
 import type { KeyPairHex } from "./lib/crypto.js";
 import type { ModelProvider } from "./lib/models.js";
-import { prepareBundle, sellerCommit, sellerDeliver, sellerReveal, withdrawIfAny } from "./seller.js";
+import { prepareBundle, sellerCommit, sellerDeliver, sellerReveal, sellerSalt, withdrawIfAny } from "./seller.js";
 
 export interface Ctx {
   provider: ModelProvider;
@@ -41,7 +41,7 @@ async function expectStatus(id: bigint, want: number) {
 }
 
 async function honestFulfil(ctx: Ctx, id: bigint) {
-  const prep = await prepareBundle((await evalBounty().read.getBounty([id])).spec, ctx.provider, { seed: `seller-${ctx.seller.account.address}-${id}` });
+  const prep = await prepareBundle((await evalBounty().read.getBounty([id])).spec, ctx.provider, { seed: `seller-${ctx.seller.account.address}-${id}`, saltFor: sellerSalt(ctx.seller, id) });
   await sellerCommit(ctx.seller, id, prep);
   await sellerReveal(ctx.seller, id, prep);
   const j = await buyerJudge(ctx.buyer, id, ctx.provider);
@@ -50,6 +50,11 @@ async function honestFulfil(ctx: Ctx, id: bigint) {
   const v = await buyerVerify(ctx.buyer, id, ctx.provider);
   expect(v.verdict.action === "accept", `buyer should accept an honest delivery, got ${JSON.stringify(v.verdict)}`);
   await expectStatus(id, Status.Settled);
+}
+
+/** Call once before any story: makes the on-chain arbiter key match the derived one. */
+export async function prepareArbiter(ctx: Ctx) {
+  await ensureArbiterPubKey(ctx.arbiter, ctx.arbiterKp);
 }
 
 export async function storyHappy(ctx: Ctx) {
@@ -85,7 +90,7 @@ export async function storyEasy(ctx: Ctx) {
   log("story", "━━ 3/4 dishonest seller: well-posed but too-easy tasks, claims the band anyway");
   const id = await createBounty(ctx.buyer, ctx.cfg);
   const spec = (await evalBounty().read.getBounty([id])).spec;
-  const prep = await prepareBundle(spec, ctx.provider, { seed: `easy-${id}`, forceDifficulty: 1, who: "seller" });
+  const prep = await prepareBundle(spec, ctx.provider, { seed: `easy-${id}`, forceDifficulty: 1, who: "seller", saltFor: sellerSalt(ctx.seller, id) });
   await sellerCommit(ctx.seller, id, prep);
   await sellerReveal(ctx.seller, id, prep);
   const j = await buyerJudge(ctx.buyer, id, ctx.provider);
@@ -109,7 +114,7 @@ export async function storyBadDelivery(ctx: Ctx) {
   log("story", "━━ 4/4 bad delivery: seller posts garbage ciphertext after an approved sample");
   const id = await createBounty(ctx.buyer, ctx.cfg);
   const spec = (await evalBounty().read.getBounty([id])).spec;
-  const prep = await prepareBundle(spec, ctx.provider, { seed: `bad-${id}` });
+  const prep = await prepareBundle(spec, ctx.provider, { seed: `bad-${id}`, saltFor: sellerSalt(ctx.seller, id) });
   await sellerCommit(ctx.seller, id, prep);
   await sellerReveal(ctx.seller, id, prep);
   const j = await buyerJudge(ctx.buyer, id, ctx.provider);

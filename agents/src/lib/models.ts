@@ -1,12 +1,14 @@
 /**
- * Model providers. `provider.complete(modelId, prompt, runParams, ctx)` returns the raw answer.
+ * Model providers, routed per model id so one agent can serve bounties that pin models from
+ * different vendors:
  *
- *  - mock       deterministic, needs no key: answers correctly with a probability that depends on
- *               the model id and the task's difficulty, and can only guess on unanswerable prompts.
- *               The same (model, prompt, run) always yields the same answer, so buyer and arbiter
- *               reruns reproduce the seller's numbers exactly. Lets the whole lifecycle run on anvil.
- *  - anthropic  Claude via @anthropic-ai/sdk (ANTHROPIC_API_KEY).
- *  - openai     OpenAI chat completions via the openai package (OPENAI_API_KEY).
+ *   claude-*                      -> anthropic (@anthropic-ai/sdk, ANTHROPIC_API_KEY)
+ *   gpt-*, o1/o3/o4*, chatgpt-*    -> openai    (openai, OPENAI_API_KEY)
+ *   mock-*                        -> mock      (deterministic, keyless; used by tests and anvil e2e)
+ *
+ * MODEL_PROVIDER=mock forces everything through the mock (CI, e2e). MODEL_PROVIDER=auto (default)
+ * routes by id. Paid providers are wrapped in a per-process call budget (MODEL_CALL_BUDGET) so no
+ * loop or hostile counterparty can drain credits.
  */
 import { keccak256, toHex } from "viem";
 import type { RunParams, Task } from "./bundle.js";
@@ -24,6 +26,35 @@ export interface CallContext {
 export interface ModelProvider {
   readonly name: string;
   complete(modelId: string, prompt: string, runParams: RunParams, ctx: CallContext): Promise<string>;
+}
+
+export type Vendor = "mock" | "anthropic" | "openai";
+
+/** Which vendor serves a model id, or null if we do not recognise it. */
+export function vendorForModel(modelId: string): Vendor | null {
+  const id = modelId.toLowerCase();
+  if (id === NULL_MODEL || id.startsWith("mock")) return "mock";
+  if (id.startsWith("claude-")) return "anthropic";
+  if (/^(gpt-|o\d|chatgpt-)/.test(id)) return "openai";
+  return null;
+}
+
+/** MODEL_PROVIDER: "auto" (default) routes by model id; "mock" forces the mock; a vendor name pins the default pair. */
+export function forcedProvider(): "mock" | "anthropic" | "openai" | "auto" {
+  const v = (process.env.MODEL_PROVIDER ?? "").trim().toLowerCase();
+  if (v === "" || v === "auto") return "auto";
+  if (v === "mock" || v === "anthropic" || v === "openai") return v;
+  throw new Error(`unknown MODEL_PROVIDER "${v}" (mock | anthropic | openai | auto)`);
+}
+
+/** True if this process has what it needs (a key, or the mock) to run the model id. */
+export function canRunModel(modelId: string): boolean {
+  if (forcedProvider() === "mock") return true;
+  const v = vendorForModel(modelId);
+  if (v === "mock") return true;
+  if (v === "anthropic") return !!process.env.ANTHROPIC_API_KEY;
+  if (v === "openai") return !!process.env.OPENAI_API_KEY;
+  return false;
 }
 
 // ------------------------------------------------------------------ mock
@@ -44,6 +75,10 @@ export function mockWrongProbability(modelId: string, difficulty: number): numbe
 
 function wrongAnswer(task: Task, u: number): string {
   const ref = task.reference;
+  if (task.grader.type === "choice") {
+    const letters = "ABCDEF".replace(ref.toUpperCase(), "");
+    return `(${letters[Math.floor(u * letters.length)]})`;
+  }
   if (task.grader.type === "numeric") {
     const n = Number(ref);
     if (Number.isFinite(n) && Number.isInteger(n)) {
@@ -52,7 +87,6 @@ function wrongAnswer(task: Task, u: number): string {
     }
     return (n * (1.05 + u * 0.4)).toFixed(2);
   }
-  // string: rotate by a non-zero amount, guaranteed different for len > 1
   const k = 1 + Math.floor(u * Math.max(1, ref.length - 1));
   const rotated = ref.slice(k) + ref.slice(0, k);
   return rotated === ref ? ref + "x" : rotated;
@@ -80,7 +114,6 @@ async function anthropicProvider(): Promise<ModelProvider> {
       if (modelId === NULL_MODEL) return NULL_ANSWER;
       // Sampling parameters are rejected on Claude 4.6+ / 5 models; only pre-4.6 (e.g. Haiku 4.5) take temperature.
       const acceptsTemperature = /haiku-4-5|-4-5|-4-1|-3-/.test(modelId);
-      // Adaptive thinking counts toward max_tokens on 4.6+/5 models: give it room, keep effort low.
       const reasoning = !acceptsTemperature;
       const res = await client.messages.create({
         model: modelId,
@@ -144,30 +177,42 @@ export function withBudget(p: ModelProvider, budget = MODEL_CALL_BUDGET): ModelP
   };
 }
 
-// ------------------------------------------------------------------ selection
+// ------------------------------------------------------------------ routing
 
+/** Vendor whose default pair the demo buyer pins, and the label used in logs. */
 export function providerName(): string {
-  const v = (process.env.MODEL_PROVIDER ?? "").trim();
-  return v === "" ? "mock" : v;
+  const f = forcedProvider();
+  if (f !== "auto") return f;
+  if (process.env.OPENAI_API_KEY) return "openai";
+  if (process.env.ANTHROPIC_API_KEY) return "anthropic";
+  return "mock";
 }
 
-export async function getProvider(name = providerName()): Promise<ModelProvider> {
-  switch (name) {
-    case "mock":
-      return mockProvider;
-    case "anthropic":
-      return withBudget(await anthropicProvider());
-    case "openai":
-      return withBudget(await openaiProvider());
-    default:
-      throw new Error(`unknown MODEL_PROVIDER ${name}`);
-  }
+const vendorCache = new Map<Vendor, Promise<ModelProvider>>();
+async function vendorProvider(v: Vendor): Promise<ModelProvider> {
+  if (v === "mock") return mockProvider;
+  if (!vendorCache.has(v)) vendorCache.set(v, (v === "anthropic" ? anthropicProvider() : openaiProvider()).then((p) => withBudget(p)));
+  return vendorCache.get(v)!;
 }
 
-/** Sensible pinned model ids per provider for the weak/strong pair. */
-export function defaultModels(provider: string): { weak: string; strong: string } {
-  if (provider === "anthropic") return { weak: "claude-haiku-4-5", strong: "claude-sonnet-5" };
-  // Cheapest pair with a real capability gap: a non-reasoning nano vs a reasoning nano (pinned snapshots).
-  if (provider === "openai") return { weak: "gpt-4.1-nano-2025-04-14", strong: "gpt-5-nano-2025-08-07" };
+/** A provider that dispatches each call to the vendor implied by the model id. */
+export async function getProvider(): Promise<ModelProvider> {
+  if (forcedProvider() === "mock") return mockProvider;
+  return {
+    name: providerName(),
+    async complete(modelId, prompt, runParams, ctx) {
+      if (modelId === NULL_MODEL) return NULL_ANSWER;
+      const v = vendorForModel(modelId);
+      if (!v) throw new Error(`no provider for model id "${modelId}"`);
+      if (!canRunModel(modelId)) throw new Error(`cannot run "${modelId}": missing API key for ${v}`);
+      return (await vendorProvider(v)).complete(modelId, prompt, runParams, ctx);
+    },
+  };
+}
+
+/** Pinned weak/strong pair used by the demo buyer for a vendor. Cheapest pair with a real capability gap. */
+export function defaultModels(vendor: string = providerName()): { weak: string; strong: string } {
+  if (vendor === "anthropic") return { weak: "claude-haiku-4-5", strong: "claude-sonnet-5" };
+  if (vendor === "openai") return { weak: "gpt-4.1-nano-2025-04-14", strong: "gpt-5-nano-2025-08-07" };
   return { weak: "mock-weak", strong: "mock-strong" };
 }

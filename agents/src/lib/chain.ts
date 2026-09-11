@@ -18,7 +18,7 @@ import {
   type WalletClient,
 } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
-import { foundry, sepolia } from "viem/chains";
+import * as chains from "viem/chains";
 import { arbitratorAbi, evalBountyAbi } from "./abi.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -55,13 +55,29 @@ export const env = {
   },
 };
 
+/**
+ * CHAIN may be a viem chain name ("sepolia", "anvil"/"foundry", "baseSepolia", ...) or a numeric chain id.
+ * Nothing else in the agents is chain-specific; explorer links come from the chain definition.
+ */
 export function chain(): Chain {
-  return env.chainName === "sepolia" ? sepolia : foundry;
+  const name = env.chainName;
+  if (name === "anvil") return chains.foundry;
+  if (/^\d+$/.test(name)) {
+    const byId = Object.values(chains).find((c) => typeof c === "object" && c !== null && "id" in c && (c as Chain).id === Number(name)) as Chain | undefined;
+    if (byId) return byId;
+  }
+  const byName = (chains as Record<string, unknown>)[name] as Chain | undefined;
+  if (byName && typeof byName === "object" && "id" in byName) return byName;
+  throw new Error(`unknown CHAIN "${name}"; use a viem chain name (sepolia, foundry, baseSepolia, ...) or a chain id`);
+}
+
+export function explorerBase(): string | undefined {
+  return chain().blockExplorers?.default?.url;
 }
 
 export const explorer = {
-  tx: (hash: Hex) => (env.chainName === "sepolia" ? `https://sepolia.etherscan.io/tx/${hash}` : `tx ${hash.slice(0, 14)}…`),
-  address: (a: Address) => (env.chainName === "sepolia" ? `https://sepolia.etherscan.io/address/${a}` : a),
+  tx: (hash: Hex) => (explorerBase() ? `${explorerBase()}/tx/${hash}` : `tx ${hash.slice(0, 14)}…`),
+  address: (a: Address) => (explorerBase() ? `${explorerBase()}/address/${a}` : a),
 };
 
 export type Wallet = WalletClient<Transport, Chain, Account>;
@@ -75,12 +91,23 @@ export function resetClients() {
   _pc = undefined;
 }
 
+const secrets = new WeakMap<object, Hex>();
+
 export function wallet(privateKey: Hex): Wallet {
-  return createWalletClient({
+  const w = createWalletClient({
     account: privateKeyToAccount(privateKey),
     chain: chain(),
     transport: http(env.rpcUrl, { retryCount: 5 }),
   });
+  secrets.set(w, privateKey);
+  return w;
+}
+
+/** The private key a wallet was created with (never logged; used to derive per-bounty keys). */
+export function secretOf(w: Wallet): Hex {
+  const k = secrets.get(w);
+  if (!k) throw new Error("wallet was not created with wallet(); cannot derive keys");
+  return k;
 }
 
 function evalBountyAddress(): Address {
@@ -180,6 +207,6 @@ export async function waitForBlockAfter(target: bigint, who = "chain") {
     const n = await pc.getBlockNumber({ cacheTime: 0 });
     if (n > target) return n;
     log(who, `waiting for block ${target + 1n} (now ${n}) so blockhash(${target}) is fixed`);
-    await sleep(env.chainName === "sepolia" ? 4000 : 300);
+    await sleep(chain().id === chains.foundry.id ? 300 : 4000);
   }
 }

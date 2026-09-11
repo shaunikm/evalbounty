@@ -3,10 +3,27 @@
 import { createPublicClient, http, parseEventLogs, formatEther } from "https://esm.sh/viem@2.56.3";
 import * as chains from "https://esm.sh/viem@2.56.3/chains";
 
-const cfg = window.EVALBOUNTY_CONFIG;
-const abi = window.EVALBOUNTY_ABI;
+// Configuration: URL query (?contract=0x…&chain=11155111&from=BLOCK&rpc=https://…) overrides the
+// build-time config.js (written by the deploy script or, on Vercel, from environment variables by
+// dashboard/build-config.mjs). The same page can therefore inspect any EvalBounty deployment.
 const $ = (s) => document.querySelector(s);
 const $$ = (s) => [...document.querySelectorAll(s)];
+const abi = window.EVALBOUNTY_ABI;
+const q = new URLSearchParams(location.search);
+const base = window.EVALBOUNTY_CONFIG ?? {};
+const cfg = {
+  chainId: Number(q.get("chain") ?? base.chainId ?? 11155111),
+  contractAddress: q.get("contract") ?? base.contractAddress ?? null,
+  arbitratorAddress: q.get("arbitrator") ?? base.arbitratorAddress ?? null,
+  deployBlock: Number(q.get("from") ?? base.deployBlock ?? 0),
+  rpcUrl: q.get("rpc") ?? base.rpcUrl ?? null,
+  agents: base.agents ?? {},
+  videoUrl: base.videoUrl, repoUrl: base.repoUrl,
+};
+const chain = Object.values(chains).find((c) => c && typeof c === "object" && c.id === cfg.chainId) ?? chains.sepolia;
+// Explorer comes from the chain definition (an explicit explorerBase in an older config.js still wins).
+const explorerBase = base.explorerBase ?? chain.blockExplorers?.default?.url ?? "";
+const rpcUrl = cfg.rpcUrl ?? chain.rpcUrls?.default?.http?.[0];
 const ZERO = "0x0000000000000000000000000000000000000000";
 const STATUS = ["Open", "Committed", "Sampled", "Approved", "Delivered", "Disputed", "Settled", "Refunded", "Cancelled"];
 const LIVE = new Set(["Committed", "Sampled", "Approved", "Delivered", "Disputed"]);
@@ -28,7 +45,7 @@ const CATS = [
 const catOf = (name) => CAT[name] ?? "admin";
 
 // ---------- formatting ----------
-const hasExplorer = !!cfg.explorerBase;
+const hasExplorer = !!explorerBase;
 const short = (a) => (a ? `${a.slice(0, 6)}…${a.slice(-4)}` : "—");
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 const pct = (bps) => `${(Number(bps) / 100).toFixed(0)}%`;
@@ -49,12 +66,12 @@ function addr(a, { label = true } = {}) {
   if (!a || a === ZERO) return `<span class="faint">—</span>`;
   const inner = `${identicon(a)}${short(a)}${label && who(a) ? `<span class="who">${who(a)}</span>` : ""}`;
   return hasExplorer
-    ? `<a class="addr" href="${cfg.explorerBase}/address/${a}" target="_blank" rel="noopener" data-tip="${a}" data-tip-mono>${inner}</a>`
+    ? `<a class="addr" href="${explorerBase}/address/${a}" target="_blank" rel="noopener" data-tip="${a}" data-tip-mono>${inner}</a>`
     : `<span class="addr" data-tip="${a}" data-tip-mono>${inner}</span>`;
 }
 function tx(h, text = "tx") {
   return hasExplorer
-    ? `<a class="tx" href="${cfg.explorerBase}/tx/${h}" target="_blank" rel="noopener" data-tip="tx ${h}" data-tip-mono>${text}${EXT}</a>`
+    ? `<a class="tx" href="${explorerBase}/tx/${h}" target="_blank" rel="noopener" data-tip="tx ${h}" data-tip-mono>${text}${EXT}</a>`
     : `<span class="tx" data-tip="tx ${h}" data-tip-mono>${text}</span>`;
 }
 const timeOf = (sec) => new Date(Number(sec) * 1000);
@@ -99,18 +116,58 @@ function narrate(ev) {
 }
 
 // ---------- chain ----------
-const chain = Object.values(chains).find((c) => c && typeof c === "object" && c.id === cfg.chainId) ?? chains.sepolia;
-const client = createPublicClient({ chain, transport: http(cfg.rpcUrl) });
+const client = createPublicClient({ chain, transport: http(rpcUrl, { retryCount: 3 }) });
+
+// ---- event store: incremental, chunked, cached in the browser --------------------------------
+// Public RPCs cap eth_getLogs ranges, so history is fetched in windows, only the new blocks are
+// fetched on each refresh, and raw logs are cached in localStorage per (chain, contract) so a
+// reload is instant and history survives RPC hiccups. The chain remains the source of truth.
+const CACHE_KEY = `evalbounty:v1:${cfg.chainId}:${String(cfg.contractAddress).toLowerCase()}`;
+const REORG_DEPTH = 12n;
+let store = { lastBlock: null, logs: [] };
+try {
+  const raw = localStorage.getItem(CACHE_KEY);
+  if (raw) { const parsed = JSON.parse(raw); store = { lastBlock: parsed.lastBlock ? BigInt(parsed.lastBlock) : null, logs: parsed.logs.map(reviveLog) }; }
+} catch {}
+// viem logs carry bigints (blockNumber, blockTimestamp); serialize them as strings and revive the ones we compare on.
+function reviveLog(l) { return { ...l, blockNumber: BigInt(l.blockNumber), blockTimestamp: l.blockTimestamp != null ? BigInt(l.blockTimestamp) : undefined, logIndex: Number(l.logIndex), transactionIndex: Number(l.transactionIndex ?? 0) }; }
+const bigintToString = (_k, v) => (typeof v === "bigint" ? v.toString() : v);
+function saveStore() {
+  try { localStorage.setItem(CACHE_KEY, JSON.stringify({ lastBlock: store.lastBlock?.toString() ?? null, logs: store.logs }, bigintToString)); }
+  catch (err) { console.warn("event cache not saved:", err?.message ?? err); }
+}
+async function fetchLogsChunked(fromBlock, toBlock, chunk = 9_000n) {
+  const out = [];
+  let from = fromBlock;
+  while (from <= toBlock) {
+    const to = from + chunk - 1n < toBlock ? from + chunk - 1n : toBlock;
+    try { out.push(...(await client.getLogs({ address: cfg.contractAddress, fromBlock: from, toBlock: to }))); from = to + 1n; }
+    catch (err) { if (chunk > 500n) { chunk = chunk / 4n; continue; } throw err; } // provider range limit: shrink and retry
+  }
+  return out;
+}
+async function syncLogs(head) {
+  const start = store.lastBlock === null ? BigInt(cfg.deployBlock) : (store.lastBlock - REORG_DEPTH > 0n ? store.lastBlock - REORG_DEPTH : 0n);
+  if (start > head) return;
+  const fresh = await fetchLogsChunked(start, head);
+  const kept = store.logs.filter((l) => l.blockNumber < start);
+  const seen = new Set(kept.map((l) => `${l.transactionHash}:${l.logIndex}`));
+  store.logs = [...kept, ...fresh.filter((l) => !seen.has(`${l.transactionHash}:${l.logIndex}`))];
+  store.lastBlock = head;
+  saveStore();
+}
 async function readMany(contracts) {
   if (!contracts.length) return [];
   if (chain.contracts?.multicall3) return client.multicall({ contracts });
   return Promise.all(contracts.map((c) => client.readContract(c).then((result) => ({ status: "success", result })).catch((error) => ({ status: "failure", error }))));
 }
 const blockTimes = new Map(); // blockNumber(string) -> unix seconds, cached across refreshes
+// Block timestamps: from the logs when the RPC provides them, otherwise fetched once per block and kept.
 async function fillBlockTimes(events) {
+  for (const l of store.logs) if (l.blockTimestamp != null) blockTimes.set(l.blockNumber.toString(), Number(l.blockTimestamp));
   const missing = [...new Set(events.map((e) => e.blockNumber.toString()))].filter((b) => !blockTimes.has(b));
   for (let i = 0; i < missing.length; i += 8) {
-    await Promise.all(missing.slice(i, i + 8).map(async (bn) => { const b = await client.getBlock({ blockNumber: BigInt(bn) }); blockTimes.set(bn, Number(b.timestamp)); }));
+    await Promise.all(missing.slice(i, i + 8).map(async (bn) => { try { const b = await client.getBlock({ blockNumber: BigInt(bn) }); blockTimes.set(bn, Number(b.timestamp)); } catch {} }));
   }
 }
 const tsOf = (e) => blockTimes.get(e.blockNumber.toString());
@@ -147,8 +204,8 @@ let newFrom = Infinity; // index of the first event that arrived on the latest r
 async function refresh() {
   try {
     const head = await client.getBlockNumber();
-    const logs = await client.getLogs({ address: cfg.contractAddress, fromBlock: BigInt(cfg.deployBlock), toBlock: "latest" });
-    const events = parseEventLogs({ abi, logs }).sort((x, y) => Number(x.blockNumber - y.blockNumber) || x.logIndex - y.logIndex);
+    await syncLogs(head);
+    const events = parseEventLogs({ abi, logs: store.logs }).sort((x, y) => Number(x.blockNumber - y.blockNumber) || x.logIndex - y.logIndex);
     await fillBlockTimes(events);
     const count = Number(await client.readContract({ address: cfg.contractAddress, abi, functionName: "bountyCount" }));
     const bounties = (await readMany(Array.from({ length: count }, (_, i) => ({ address: cfg.contractAddress, abi, functionName: "getBounty", args: [BigInt(i)] })))).map((r) => (r.status === "success" ? r.result : null));
@@ -265,18 +322,18 @@ function renderTop() {
   if (S.error) live.innerHTML = `<span class="dot bad"></span><span>RPC error</span>`;
   else if (!S.refreshedAt) live.innerHTML = `<span class="dot wait"></span><span>connecting</span>`;
   else { const fresh = Number.isFinite(newFrom) ? S.events.length - newFrom : 0; live.innerHTML = `<span class="dot"></span><span>block ${fmtInt(S.head)}</span><span class="plus">+${fresh}</span>`; if (fresh) { live.classList.add("flash"); setTimeout(() => live.classList.remove("flash"), 4000); } }
-  live.setAttribute("data-tip", S.error ? S.error : `${chain.name} via ${cfg.rpcUrl}\nrefreshes every 10 s`);
+  live.setAttribute("data-tip", S.error ? S.error : `${chain.name} via ${rpcUrl}\nlogs cached locally · refreshes every 10 s`);
   $("#netBadge").textContent = chain.name;
   $("#refreshedAt").textContent = S.error ? `error: ${S.error}` : S.refreshedAt ? `refreshed ${S.refreshedAt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}` : "connecting…";
   $("#stNet").textContent = `${chain.name} (${cfg.chainId})`;
   if (S.refreshedAt) counter("head", $("#stBlock"), Number(S.head), (v) => fmtInt(Math.round(v)), { from: Math.max(0, Number(S.head) - 400), dur: 1400 }); else $("#stBlock").textContent = "—";
-  $("#stContract").innerHTML = addr(cfg.contractAddress, { label: false }) + (hasExplorer ? ` <a class="tx" href="${cfg.explorerBase}/address/${cfg.contractAddress}#code" target="_blank" rel="noopener">verified${EXT}</a>` : "");
+  $("#stContract").innerHTML = addr(cfg.contractAddress, { label: false }) + (hasExplorer ? ` <a class="tx" href="${explorerBase}/address/${cfg.contractAddress}#code" target="_blank" rel="noopener">verified${EXT}</a>` : "");
   $("#stArb").innerHTML = addr(cfg.arbitratorAddress, { label: false });
-  if (S.refreshedAt) { $("#stEvents").innerHTML = `<span id="stEventsN"></span> since block ${fmtInt(cfg.deployBlock)}`; counter("events", $("#stEventsN"), S.events.length, (v) => fmtInt(Math.round(v))); } else $("#stEvents").textContent = "—";
+  if (S.refreshedAt) { $("#stEvents").innerHTML = `<span id="stEventsN"></span> since block ${fmtInt(cfg.deployBlock)} <span class="faint" data-tip="Raw logs are cached in this browser per chain and contract; only new blocks are fetched on refresh.">· cached</span>`; counter("events", $("#stEventsN"), S.events.length, (v) => fmtInt(Math.round(v))); } else $("#stEvents").textContent = "—";
   const escrow = S.bounties.reduce((s, b) => (b && LIVE.has(STATUS[b.status]) || (b && STATUS[b.status] === "Open") ? s + b.reward + b.sellerBond + b.disputeBond : s), 0n);
   $("#stEscrow").textContent = S.refreshedAt ? eth(escrow) : "—";
   for (const [id, a] of [["#navContract", cfg.contractAddress], ["#navArbiter", cfg.arbitratorAddress], ["#ctaContract", cfg.contractAddress]]) {
-    const el = $(id); if (hasExplorer) el.href = `${cfg.explorerBase}/address/${a}`; else { el.removeAttribute("href"); el.style.opacity = .5; el.title = "no block explorer for this chain"; }
+    const el = $(id); if (hasExplorer && a) el.href = `${explorerBase}/address/${a}`; else { el.removeAttribute("href"); el.style.opacity = .5; el.setAttribute("data-tip", a ? "no block explorer for this chain" : "not configured"); }
   }
   if (cfg.videoUrl) { $("#navVideo").href = cfg.videoUrl; $("#navVideo").hidden = false; }
   if (cfg.repoUrl) { $("#navRepo").href = cfg.repoUrl; }
@@ -456,8 +513,8 @@ function detailHTML(i, b, evs) {
     <div><h4>Timeline</h4><ul class="timeline">${evs.map((e) => `<li class="${catOf(e.eventName)}"><span class="t">${tsOf(e) ? fmtTime(tsOf(e)) : `#${e.blockNumber}`}</span><span class="e">${e.eventName}</span>${narrate(e)} ${tx(e.transactionHash, "")}</li>`).join("")}</ul></div>
     <div>
       ${dl.length ? `<h4>Deadlines</h4><div class="deadlines">${dl.map(([k, t]) => `<span class="badge ${Number(t) < now ? "gray" : "amber"}">${k} ${fmtDateTime(t)} · ${rel(t)}</span>`).join("")}</div>` : ""}
-      <h4>Revealed sample · current commit</h4>
-      ${revealed.length ? revealed.map((e) => { const t = parseTask(e.args.task); if (!t) return ""; return `<div class="task"><div class="hd"><b>task ${e.args.index}</b><span>${esc(t.family)} · d${t.difficulty}</span><span>${esc(t.grader?.type ?? "")}</span></div><div class="p">${esc(t.prompt)}</div><div class="ref">reference <b>${esc(t.reference)}</b></div></div>`; }).join("") : `<div class="faint copy-13">Nothing revealed yet. The seller reveals only the indices that blockhash(sampleBlock) selects.</div>`}
+      <h4>Revealed sample · current commit <span class="faint" style="text-transform:none;letter-spacing:0;font-weight:400" data-tip="Real evaluation items with exact-answer graders. This demo samples committed snapshots of BIG-Bench Hard and GSM8K; each revealed task shows its source id. A real seller's value is that its items are not public, which is exactly what the buyer cannot check before paying and what the random sample is for.">· what is in a bundle?</span></h4>
+      ${revealed.length ? revealed.map((e) => { const t = parseTask(e.args.task); if (!t) return ""; return `<div class="task"><div class="hd"><b>task ${e.args.index}</b><span>${esc(t.family)}${t.sourceId ? ` · <span data-tip="provenance in the public snapshot" data-tip-mono>${esc(t.sourceId)}</span>` : ` · d${t.difficulty}`}</span><span>${esc(t.grader?.type ?? "")}</span></div><div class="p">${esc(t.prompt)}</div><div class="ref">reference <b>${esc(t.reference)}</b></div></div>`; }).join("") : `<div class="faint copy-13">Nothing revealed yet. The seller reveals only the indices that blockhash(sampleBlock) selects.</div>`}
       <div class="kv"><b>task root</b><span>${b.taskRoot}</span><b>bundle hash</b><span>${b.bundleCommitment}</span><b>sample block</b><span>${b.sampleBlock}</span><b>buyer X25519</b><span>${b.buyerPubKey}</span>${b.ciphertextHash && !/^0x0+$/.test(b.ciphertextHash) ? `<b>ciphertext hash</b><span>${b.ciphertextHash}</span>` : ""}<b>run params</b><span>${b.spec.runParamsHash}</span></div>
     </div></div>`;
 }
@@ -545,6 +602,12 @@ function scrub(sp, ev) {
 }
 if (["bounties", "reputation", "log"].includes(location.hash.slice(1))) setTab(location.hash.slice(1));
 
-renderAll();
-refresh();
-setInterval(refresh, 10_000);
+if (!cfg.contractAddress) {
+  S.error = "no contract configured"; renderAll();
+  $("#refreshedAt").textContent = "not configured";
+  $("#stContract").innerHTML = `<span class="warn">open as ?contract=0x…&amp;chain=${cfg.chainId}&amp;from=&lt;deployBlock&gt;, or set EVALBOUNTY_ADDRESS when building</span>`;
+} else {
+  renderAll();
+  refresh();
+  setInterval(refresh, 10_000);
+}

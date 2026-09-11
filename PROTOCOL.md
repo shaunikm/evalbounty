@@ -1,0 +1,100 @@
+# EvalBounty protocol v1 — what a third-party agent must implement
+
+The contract is permissionless. Any wallet can post a bounty, commit to one, arbitrate (if set as
+arbitrator) or finalize a stalled one. This document is everything an independent buyer or seller
+implementation needs to interoperate with the reference agents. Anything not listed here is a
+private implementation choice.
+
+## On-chain interface
+
+`EvalBounty` (Solidity, ABI in `agents/src/lib/abi.ts` / `dashboard/abi.js`). Lifecycle:
+
+```
+createBounty(Spec, bytes32 buyerPubKey) payable → id
+commit(id, bytes32 taskRoot, bytes32 bundleCommitment) payable   (bond ≥ minSellerBond(id))
+revealSample(id, bytes[] tasks, bytes32[][] proofs)               (block.number > sampleBlock, indices = sampleIndices(id))
+approveSample(id) | rejectSample(id, string reason)
+deliver(id, bytes ciphertext)
+accept(id) | dispute(id, DisputeKind, bytes evidence) payable      (msg.value == disputeCost(id))
+rule(disputeID, ruling)  ← called by the ERC-792 arbitrator (1 seller, 2 buyer, 0 refused → split)
+finalize(id)             ← anyone, past any deadline
+withdraw()
+```
+
+`Spec` = `{ domainTag, taskCount N, sampleSize k, weakModel, strongModel, weakMaxBps, strongMinBps, nullMaxBps, runs, toleranceBps, runParamsHash }`.
+
+## Task and bundle format
+
+A **task** is a JSON object:
+
+```json
+{ "index": 7, "family": "date_understanding", "difficulty": 3, "prompt": "…",
+  "grader": { "type": "choice" | "numeric" | "exact" | "regex", "value": "B", "tolerance": 0 },
+  "reference": "B", "sourceId": "bbh/date_understanding/17" }
+```
+
+`sourceId` is optional provenance. Grader semantics: `choice` compares the first multiple-choice letter
+found in the answer ("(B)", "B", "B)", "the answer is (B)"); `numeric` compares the last number in the
+answer within `tolerance`; `exact` compares after trimming, stripping quotes and trailing punctuation,
+collapsing whitespace and lower-casing; `regex` is case-insensitive.
+
+A **bundle** is:
+
+```json
+{ "version": 1, "salt": "0x…32 bytes", "domainTag": "…", "runParams": {…},
+  "tasks": [ …N tasks with index = position… ], "sellerMeasured": { "weak": bps, "strong": bps, "null": bps } }
+```
+
+**Canonical bytes** are RFC 8785 (JSON Canonicalization Scheme) UTF-8 of the value. All hashes below are
+over canonical bytes, so independent implementations derive identical bytes from identical values.
+
+- `bundleCommitment = keccak256(canonical(bundle))`
+- `taskBytes_i = canonical(tasks[i])`, `taskHash_i = keccak256(taskBytes_i)`
+- Merkle leaf `i` = OpenZeppelin StandardMerkleTree over `[uint256 index, bytes32 taskHash]`, i.e.
+  `keccak256(bytes.concat(keccak256(abi.encode(index, taskHash))))`; pairs hashed with sorted
+  (commutative) keccak256. `taskRoot` is the tree root. `revealSample` passes `taskBytes` and the proof for
+  each sampled index; the contract recomputes the leaf.
+
+## Run params (v1 constant)
+
+The contract pins `runParamsHash = keccak256(canonical(runParams))`. In protocol v1 there is one
+recognised value, so the hash acts as a version pin:
+
+```json
+{ "temperature": 0, "max_tokens": 64, "system": "You are being evaluated. Reply with only the final answer and nothing else." }
+```
+
+A seller must refuse bounties whose `runParamsHash` it does not recognise. Publishing the params
+on-chain as a string is the planned v2 change.
+
+## Sampling
+
+`sampleIndices(id)` is deterministic from `blockhash(sampleBlock)`: draw
+`uint256(keccak256(abi.encode(bh, id, nonce))) % N` for `nonce = 0, 1, …` until `k` distinct indices.
+`sampleBlock = commit block + 1`; reveal within 256 blocks or the commit must be withdrawn (10% bond
+penalty once the sample was knowable).
+
+## Encryption and evidence
+
+- Buyer key: X25519 public key (32 bytes) in `createBounty`.
+- Ciphertext = `nonce(24) || crypto_box_seal(K, buyerPubKey)(80) || crypto_secretbox_easy(canonical(bundle), nonce, K)`
+  with `K` = 32 random bytes (libsodium). Posted in `deliver`; it lives in the `Delivered` event log.
+- `BadDelivery` evidence = the buyer's 32-byte X25519 secret key. The arbitrator must check that it
+  derives the bounty's `buyerPubKey` (otherwise the buyer loses), then reproduce the decryption and
+  commitment/root checks.
+- `ClaimsFailed` evidence = `abi.encode(bytes sealedK, bytes32 transcriptHash)` where
+  `sealedK = crypto_box_seal(K, arbiterPubKey)` and `arbiterPubKey` is read from
+  `CentralizedArbitrator.arbiterPubKey()`.
+
+## Claims and scoring
+
+`score(model) = mean over tasks of mean over runs of grader(answer) ∈ {0,1}`, in basis points, with the
+pinned run params. `null` is the constant answer `"0"`. Claims hold iff
+`weak ≤ weakMax + tol`, `strong ≥ strongMin − tol`, `null ≤ nullMax + tol`. The arbitrator applies the same
+rule with its own rerun.
+
+## Reference-implementation choices (not part of the protocol)
+
+Deterministic per-bounty keys (BLAKE2b of wallet secret + `evalbounty/v1/buyer/<chainId>/<contract>/<txNonce>`),
+deterministic bundle salts, provider routing by model id, the benchmark snapshot and the difficulty
+mixes, the buyer's objective sample checks. Another agent may do all of these differently.

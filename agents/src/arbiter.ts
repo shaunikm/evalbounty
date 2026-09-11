@@ -16,7 +16,7 @@ import { decryptBundle, decryptWithKey, openSealedKey, publicKeyFromSecret, type
 import { deliveredCiphertext, disputedEvents, latestDispute } from "./lib/events.js";
 import { buildTaskTree } from "./lib/merkle.js";
 import { getProvider, type ModelProvider } from "./lib/models.js";
-import { loadOrCreateArbiterKeys } from "./deploy.js";
+import { legacyArbiterKeys, loadOrCreateArbiterKeys } from "./deploy.js";
 import { claimsHold, fmt, measureBundle, transcriptHash } from "./lib/verify.js";
 import { toClaimSpec, withdrawIfAny } from "./seller.js";
 
@@ -77,7 +77,13 @@ export async function arbitrate(id: bigint, provider: ModelProvider, arbiterKp: 
   try {
     key = await openSealedKey(Buffer.from(sealedHex.slice(2), "hex"), arbiterKp);
   } catch (e) {
-    return forSeller(`buyer's evidence does not open for the arbiter (${(e as Error).message}); cannot substantiate the dispute`);
+    const legacy = legacyArbiterKeys();
+    try {
+      if (!legacy) throw e;
+      key = await openSealedKey(Buffer.from(sealedHex.slice(2), "hex"), legacy);
+    } catch {
+      return forSeller(`buyer's evidence does not open for the arbiter (${(e as Error).message}); cannot substantiate the dispute`);
+    }
   }
   let plaintext: Uint8Array;
   try {
@@ -99,6 +105,16 @@ export async function arbitrate(id: bigint, provider: ModelProvider, arbiterKp: 
   log(who, `arbiter measured weak ${fmt(s.weak)} strong ${fmt(s.strong)} null ${fmt(s.null)}; transcript ${short(th)} (buyer's: ${short(buyerTranscriptHash)}${th === buyerTranscriptHash ? ", identical" : ""})`);
   const extra = { transcriptHash: th, buyerTranscriptHash, scores: s, band: { weakMax: claim.weakMaxBps, strongMin: claim.strongMinBps, nullMax: claim.nullMaxBps, tol: claim.toleranceBps } };
   return v.ok ? forSeller("claims reproduce within tolerance", extra) : forBuyer(v.reasons.join("; "), extra);
+}
+
+/** Publish the derived X25519 key on the arbitrator contract if it differs (owner-only, idempotent). */
+export async function ensureArbiterPubKey(w: Wallet, kp: KeyPairHex, who = "arbiter") {
+  const a = arbitrator(w);
+  const onchain = (await a.read.arbiterPubKey()) as Hex;
+  if (onchain.toLowerCase() === kp.publicKey.toLowerCase()) return false;
+  log(who, `on-chain arbiter key ${short(onchain)} differs from my derived key ${short(kp.publicKey)}; updating`);
+  await tx(who, "setArbiterPubKey", () => a.write.setArbiterPubKey([kp.publicKey as Hex]));
+  return true;
 }
 
 export async function arbiterRule(w: Wallet, disputeId: bigint, decision: Decision, who = "arbiter") {
@@ -141,7 +157,8 @@ export async function runArbiter(opts: { who?: string; once?: boolean } = {}) {
   const provider = await getProvider();
   const kp = await loadOrCreateArbiterKeys();
   const c = evalBounty(w);
-  log(who, `online as ${w.account.address}; X25519 ${short(kp.publicKey)} (${provider.name} provider)`);
+  log(who, `online as ${w.account.address}; X25519 ${short(kp.publicKey)} derived from my wallet (${provider.name} provider)`);
+  await ensureArbiterPubKey(w, kp, who);
   for (;;) {
     try {
       const evs = await disputedEvents();
@@ -158,7 +175,7 @@ export async function runArbiter(opts: { who?: string; once?: boolean } = {}) {
       log(who, `error: ${(e as Error).message}`);
     }
     if (opts.once) return;
-    await sleep(env.chainName === "sepolia" ? 8000 : 1500);
+    await sleep(env.chainName === "anvil" ? 1500 : 8000);
   }
 }
 

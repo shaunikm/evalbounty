@@ -452,7 +452,7 @@
     </div>
     <ol class="flow in" id="flow" style="--d:260ms">
       <li data-stage="created"><span class="n"><span class="fn">01 · createBounty</span><span class="cnt">–</span></span><b>Bounty</b><span class="d">Buyer escrows the reward and pins models, band and tolerance.</span></li>
-      <li data-stage="committed"><span class="n"><span class="fn">02 · commit</span><span class="cnt">–</span></span><b>Commit</b><span class="d">Seller posts Merkle root, bundle hash and a bond ≥ 50 % of the reward.</span></li>
+      <li data-stage="committed"><span class="n"><span class="fn">02 · commit</span><span class="cnt">–</span></span><b>Commit</b><span class="d">Seller assembles real eval items, posts Merkle root, bundle hash and a bond ≥ 50 % of the reward.</span></li>
       <li data-stage="sampled"><span class="n"><span class="fn">03 · revealSample</span><span class="cnt">–</span></span><b>Sample</b><span class="d">Next block's hash picks k of N; the seller reveals exactly those with proofs.</span></li>
       <li data-stage="approved"><span class="n"><span class="fn">04 · approveSample</span><span class="cnt">–</span></span><b>Judge</b><span class="d">Buyer approves the sample or walks away. Rejection never slashes.</span></li>
       <li data-stage="delivered"><span class="n"><span class="fn">05 · deliver</span><span class="cnt">–</span></span><b>Deliver</b><span class="d">Bundle encrypted to the buyer's X25519 key, posted in the event log.</span></li>

@@ -34,7 +34,7 @@ const { deploy } = await import("./deploy.js");
 const { env, log, publicClient, resetClients, wallet } = await import("./lib/chain.js");
 const { getProvider } = await import("./lib/models.js");
 const { defaultBuyerConfig } = await import("./buyer.js");
-const { STORIES, reputationSummary } = await import("./stories.js");
+const { STORIES, prepareArbiter, reputationSummary } = await import("./stories.js");
 
 async function waitForRpc(timeoutMs = 20_000) {
   const t0 = Date.now();
@@ -71,6 +71,7 @@ try {
     arbiterKp: dep.arbiterKp,
     cfg: defaultBuyerConfig(),
   };
+  await prepareArbiter(ctx);
   const only = process.argv.find((a) => a.startsWith("--story="))?.split("=")[1];
   for (const [name, story] of Object.entries(STORIES)) {
     if (only && only !== name) continue;
