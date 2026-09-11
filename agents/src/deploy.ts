@@ -47,7 +47,8 @@ export function legacyArbiterKeys(): KeyPairHex | undefined {
 function setEnvVar(file: string, key: string, value: string) {
   let s = existsSync(file) ? readFileSync(file, "utf8") : "";
   const re = new RegExp(`^${key}=.*$`, "m");
-  s = re.test(s) ? s.replace(re, `${key}=${value}`) : s + `\n${key}=${value}`;
+  s = re.test(s) ? s.replace(re, `${key}=${value}`) : `${s.replace(/\n*$/, "")}\n${key}=${value}`;
+  if (!s.endsWith("\n")) s += "\n"; // always newline-terminated so later appends start a fresh line
   writeFileSync(file, s);
 }
 
