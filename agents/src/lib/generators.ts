@@ -56,8 +56,10 @@ const exact = (value: string): Grader => ({ type: "exact", value });
 // ------------------------------------------------------------------ families
 
 function arith(r: Rng, d: number): Generated {
-  const digits = 3 + d;
-  const ops = d + 1;
+  // difficulty 1 is deliberately trivial (one op on 1-2 digit numbers): it is what a dishonest
+  // seller ships while claiming the band, and a weak model must be able to solve it.
+  const digits = d === 1 ? 2 : 3 + d;
+  const ops = d === 1 ? 1 : d + 1;
   let expr = r.bigint(digits).toString();
   let value = BigInt(expr);
   for (let i = 0; i < ops; i++) {
@@ -94,9 +96,9 @@ function modpow(b: bigint, e: bigint, m: bigint): bigint {
 }
 
 function modular(r: Rng, d: number): Generated {
-  const base = r.bigint(1 + d);
-  const exp = r.bigint(2 + d);
-  const mod = BigInt(r.int(97, 97 + 200 * d)) * 2n + 1n;
+  const base = d === 1 ? BigInt(r.int(2, 9)) : r.bigint(1 + d);
+  const exp = d === 1 ? 2n : r.bigint(2 + d);
+  const mod = d === 1 ? BigInt(r.int(5, 12)) : BigInt(r.int(97, 97 + 200 * d)) * 2n + 1n;
   const value = modpow(base, exp, mod);
   return {
     family: "modular",
@@ -118,6 +120,18 @@ function isoDate(r: Rng, yMin: number, yMax: number): { iso: string; ms: number 
 }
 
 function date(r: Rng, d: number): Generated {
+  if (d === 1) {
+    // trivial: weekday a few days after a named weekday
+    const start = r.int(0, 6);
+    const k = r.int(1, 3);
+    const target = DAYS[(start + k) % 7]!;
+    return {
+      family: "date",
+      prompt: `What day of the week is ${k} day${k > 1 ? "s" : ""} after ${DAYS[start]}? Reply with only the weekday name.`,
+      reference: target,
+      grader: exact(target),
+    };
+  }
   const spread = 2 * d;
   if (r.next() < 0.5) {
     const a = isoDate(r, 1950, 2049);
@@ -147,6 +161,12 @@ function date(r: Rng, d: number): Generated {
 const ALPHA = "abcdefghijklmnopqrstuvwxyz";
 
 function strings(r: Rng, d: number): Generated {
+  if (d === 1) {
+    const n = r.int(3, 6);
+    let w = "";
+    for (let i = 0; i < n; i++) w += ALPHA[r.int(0, 25)];
+    return { family: "strings", prompt: `How many letters are in the string "${w}"? Reply with only the integer.`, reference: String(n), grader: numeric(n) };
+  }
   const len = 5 + 2 * d;
   let s = "";
   for (let i = 0; i < len; i++) s += ALPHA[r.int(0, 25)];
@@ -187,6 +207,10 @@ function strings(r: Rng, d: number): Generated {
 }
 
 function units(r: Rng, d: number): Generated {
+  if (d === 1) {
+    const m = r.int(2, 9) * 100;
+    return { family: "units", prompt: `Convert ${m} centimeters to meters. Reply with only the number.`, reference: String(m / 100), grader: numeric(m / 100, 0.001) };
+  }
   const km = r.int(50, 200 * d) + r.int(0, 9) / 10;
   const hours = r.int(1, d + 1);
   const minutes = r.int(1, 59);
@@ -201,11 +225,22 @@ function units(r: Rng, d: number): Generated {
 }
 
 function sequence(r: Rng, d: number): Generated {
+  if (d === 1) {
+    const a = r.int(1, 9);
+    const step = r.int(2, 9);
+    const value = a + 3 * step;
+    return {
+      family: "sequence",
+      prompt: `A sequence starts at ${a} and each term is ${step} more than the previous one. What is the 4th term? Reply with only the integer.`,
+      reference: String(value),
+      grader: numeric(value),
+    };
+  }
   const a1 = BigInt(r.int(1, 9));
   const a2 = BigInt(r.int(10, 30));
   const p = BigInt(r.int(1, 3));
   const q = BigInt(r.int(1, 3));
-  const n = 8 + 3 * d;
+  const n = d === 1 ? 4 : 8 + 3 * d;
   let prev = a1;
   let cur = a2;
   for (let i = 3; i <= n; i++) {

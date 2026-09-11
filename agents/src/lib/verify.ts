@@ -92,7 +92,7 @@ export async function measureBundle(
 ): Promise<Transcript> {
   const perTask: TaskRecord[] = [];
   const total = bundle.tasks.length;
-  const concurrency = Math.max(1, opts.concurrency ?? (provider.name === "mock" ? 16 : 4));
+  const concurrency = Math.max(1, opts.concurrency ?? (provider.name === "mock" ? 16 : 8));
   let done = 0;
   const queue = [...bundle.tasks];
   const worker = async () => {

@@ -73,7 +73,7 @@ export const mockProvider: ModelProvider = {
 
 async function anthropicProvider(): Promise<ModelProvider> {
   const { default: Anthropic } = await import("@anthropic-ai/sdk");
-  const client = new Anthropic();
+  const client = new Anthropic({ maxRetries: 6 });
   return {
     name: "anthropic",
     async complete(modelId, prompt, runParams) {
@@ -104,7 +104,7 @@ async function anthropicProvider(): Promise<ModelProvider> {
 
 async function openaiProvider(): Promise<ModelProvider> {
   const { default: OpenAI } = await import("openai");
-  const client = new OpenAI();
+  const client = new OpenAI({ maxRetries: 6 }); // ride out 429s at concurrency 8
   return {
     name: "openai",
     async complete(modelId, prompt, runParams) {
