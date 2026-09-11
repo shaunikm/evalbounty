@@ -72,7 +72,7 @@
   </p>
   <div class="steps">
     <div class="step"><b>1 · Bounty</b><span>Buyer escrows the reward and pins models, band, tolerance and run params.</span></div>
-    <div class="step"><b>2 · Commit</b><span>Seller posts Merkle root + bundle hash + bond ≥ 50 % of reward. Sample block = next block.</span></div>
+    <div class="step"><b>2 · Commit</b><span>Seller assembles real eval items (BIG-Bench Hard, GSM8K in this demo), measures them, posts Merkle root + bundle hash + bond ≥ 50 % of reward.</span></div>
     <div class="step"><b>3 · Sample</b><span>blockhash picks k of N tasks; seller must reveal exactly those with proofs.</span></div>
     <div class="step"><b>4 · Judge</b><span>Buyer checks the sample is well-posed and in domain, approves or walks away.</span></div>
     <div class="step"><b>5 · Deliver</b><span>Bundle encrypted to the buyer's X25519 key, posted in the event log.</span></div>
@@ -121,6 +121,7 @@
     <h2>Mechanism notes</h2>
     <div class="kv">
       <b>Why a random sample</b><span>The seller commits before knowing which tasks are shown. A bundle with junk fraction f survives a k-task sample with probability (1−f)<sup>k</sup>: at k = 4, 30 % junk is caught 76 % of the time. Walking away after seeing the sample costs 10 % of the bond, so re-rolling is priced.</span>
+      <b>What is in a bundle</b><span>Real evaluation items with exact-answer graders. This demo samples from committed snapshots of <a href="https://github.com/suzgunmirac/BIG-Bench-Hard" target="_blank" rel="noopener">BIG-Bench Hard</a> (13 reasoning subtasks, Suzgun et al. 2022) and <a href="https://github.com/openai/grade-school-math" target="_blank" rel="noopener">GSM8K</a> (Cobbe et al. 2021), both MIT; each revealed task shows its source id. Public items are the contaminated case by definition: a real seller's value is that its items are <i>not</i> public, which is exactly what the buyer cannot check before paying and what the random sample is for.</span>
       <b>Why claims, not "quality"</b><span>"Weak model ≤ 35 %, strong model ≥ 65 %, null policy ≤ 5 %" is reproducible by the buyer and the arbiter with the committed run params; "useful" is not. Tolerance ≥ 2·SE (Miller 2024) absorbs rerun noise.</span>
       <b>Why Sepolia L1</b><span>Sampling uses <code>blockhash(sampleBlock)</code>. Arbitrum documents its blockhash as "cryptographically insecure, pseudo-random" and returns constant 1 for <code>prevrandao</code>; the mechanism is stronger on L1.</span>
       <b>Why ERC-792</b><span>Disputes go through Kleros' arbitration interface, so the single bonded arbiter used here can be swapped for a court with one <code>setArbitrator</code> call. Rulings: 1 seller, 2 buyer, 0 refused → 50/50 split.</span>
@@ -248,7 +249,7 @@ async function refresh() {
         const current = revealed.filter(e => evs.indexOf(e) > lastCommitIdx);
         d.innerHTML = `<td colspan="8"><div class="grid2">
           <div><b>Timeline</b><ul class="timeline">${evs.map(e => `<li><span class="t">${blockTimes[e.blockNumber.toString()] ? new Date(blockTimes[e.blockNumber.toString()]*1000).toLocaleTimeString() : ""}</span>${narrate(e, b)} ${txLink(e.transactionHash, "↗")}</li>`).join("")}</ul></div>
-          <div><b>Revealed sample (current commit)</b>${current.length ? current.map(e => { let t; try { t = JSON.parse(new TextDecoder().decode(hexToBytes(e.args.task))); } catch { return ""; } return `<div class="task"><span class="idx">task ${e.args.index}</span> <span class="muted">${esc(t.family)} · d${t.difficulty}</span><br>${esc(t.prompt)}<br><span class="muted">reference:</span> <span class="ref">${esc(t.reference)}</span> <span class="muted">(${esc(t.grader.type)})</span></div>`; }).join("") : `<div class="empty">nothing revealed yet</div>`}
+          <div><b>Revealed sample (current commit)</b>${current.length ? current.map(e => { let t; try { t = JSON.parse(new TextDecoder().decode(hexToBytes(e.args.task))); } catch { return ""; } return `<div class="task"><span class="idx">task ${e.args.index}</span> <span class="muted">${esc(t.family)}${t.sourceId ? ` · <span title="provenance in the public snapshot">${esc(t.sourceId)}</span>` : ` · d${t.difficulty}`}</span><br><span style="white-space:pre-wrap">${esc(t.prompt)}</span><br><span class="muted">reference:</span> <span class="ref">${esc(t.reference)}</span> <span class="muted">(${esc(t.grader.type)})</span></div>`; }).join("") : `<div class="empty">nothing revealed yet</div>`}
           <div class="kv" style="margin-top:12px"><b>task root</b><span class="mono">${b.taskRoot}</span><b>bundle hash</b><span class="mono">${b.bundleCommitment}</span><b>sample block</b><span class="mono">${b.sampleBlock}</span><b>buyer X25519</b><span class="mono">${b.buyerPubKey}</span></div></div>
         </div></td>`;
         tbody.appendChild(d);

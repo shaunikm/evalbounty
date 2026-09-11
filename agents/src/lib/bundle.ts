@@ -10,10 +10,10 @@ import canonicalize from "canonicalize";
 import { keccak256, type Hex } from "viem";
 import { z } from "zod";
 
-export type GraderType = "exact" | "numeric" | "regex";
+export type GraderType = "exact" | "numeric" | "regex" | "choice";
 
 export const GraderSchema = z.object({
-  type: z.enum(["exact", "numeric", "regex"]),
+  type: z.enum(["exact", "numeric", "regex", "choice"]),
   value: z.string(),
   tolerance: z.number().nonnegative().optional(),
 });
@@ -26,6 +26,8 @@ export const TaskSchema = z.object({
   prompt: z.string().min(1),
   grader: GraderSchema,
   reference: z.string(),
+  /** Provenance for real benchmark items, e.g. "bbh/date_understanding/17" or "gsm8k/test/42". */
+  sourceId: z.string().optional(),
 });
 export type Task = z.infer<typeof TaskSchema>;
 
@@ -96,11 +98,24 @@ function parseNumber(s: string): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
+/** Multiple-choice letter in a free-form answer: "(B)", "B", "B)", "b.", "The answer is (B)". */
+export function parseChoice(answer: string): string | null {
+  const paren = answer.match(/\(([A-Za-z])\)/);
+  if (paren) return paren[1]!.toUpperCase();
+  const lead = answer.trim().match(/^([A-Za-z])(?:[).:\s]|$)/);
+  if (lead) return lead[1]!.toUpperCase();
+  const tail = answer.trim().match(/\b([A-Za-z])[).]?\s*$/);
+  if (tail) return tail[1]!.toUpperCase();
+  return null;
+}
+
 /** 1 if the answer passes the task's grader, 0 otherwise. */
 export function grade(task: Task, answer: string): 0 | 1 {
   const g = task.grader;
   if (answer.trim() === "") return 0;
   switch (g.type) {
+    case "choice":
+      return parseChoice(answer) === g.value.toUpperCase() ? 1 : 0;
     case "exact":
       return normalizeAnswer(answer) === normalizeAnswer(g.value) ? 1 : 0;
     case "numeric": {

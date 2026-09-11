@@ -44,6 +44,10 @@ export function mockWrongProbability(modelId: string, difficulty: number): numbe
 
 function wrongAnswer(task: Task, u: number): string {
   const ref = task.reference;
+  if (task.grader.type === "choice") {
+    const letters = "ABCDEF".replace(ref.toUpperCase(), "");
+    return `(${letters[Math.floor(u * letters.length)]})`;
+  }
   if (task.grader.type === "numeric") {
     const n = Number(ref);
     if (Number.isFinite(n) && Number.isInteger(n)) {

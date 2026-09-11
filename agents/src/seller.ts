@@ -15,6 +15,7 @@ import { bytesToHex, type Address, type Hex } from "viem";
 import { bundleBytes, bundleCommitment, DEFAULT_RUN_PARAMS, runParamsHash, taskBytes, type Bundle } from "./lib/bundle.js";
 import { Status, StatusName, env, eth, evalBounty, log, publicClient, short, sleep, tx, waitForBlockAfter, wallet, type Wallet } from "./lib/chain.js";
 import { encryptBundle } from "./lib/crypto.js";
+import { sampleTasks } from "./lib/datasets.js";
 import { generateJunkTasks, generateTasks } from "./lib/generators.js";
 import { buildTaskTree, proofForIndex, sampleIndicesFor, type TaskTree } from "./lib/merkle.js";
 import { getProvider, type ModelProvider } from "./lib/models.js";
@@ -82,7 +83,8 @@ export async function prepareBundle(spec: OnChainSpec, provider: ModelProvider, 
   const tried = new Set<number>();
   for (let attempt = 0; attempt < 6; attempt++) {
     tried.add(difficulty);
-    const gen = opts.junk ? generateJunkTasks : generateTasks;
+    // Real benchmark items (BBH + GSM8K snapshots) by default; TASK_SOURCE=synthetic uses the procedural generators.
+    const gen = opts.junk ? generateJunkTasks : process.env.TASK_SOURCE === "synthetic" ? generateTasks : sampleTasks;
     const tasks = gen({ seed: `${opts.seed}-d${difficulty}`, count: spec.taskCount, difficulty });
     const bundle: Bundle = {
       version: 1,
@@ -148,6 +150,10 @@ export async function sellerReveal(w: Wallet, id: bigint, prep: Prepared, who = 
   log(who, `blockhash(${b.sampleBlock}) = ${short(block.hash!)} picked tasks [${idx.join(", ")}] — I had no say in this`);
   const tree = treeOf(prep);
   const tasks = idx.map((i) => bytesToHex(taskBytes(prep.bundle.tasks[Number(i)]!)));
+  for (const i of idx) {
+    const t = prep.bundle.tasks[Number(i)]!;
+    log(who, `  revealing task ${i} [${t.family}${t.sourceId ? ` · ${t.sourceId}` : ""}]`);
+  }
   const proofs = idx.map((i) => proofForIndex(tree, Number(i)));
   return tx(who, `revealSample #${id}`, () => c.write.revealSample([id, tasks, proofs]));
 }

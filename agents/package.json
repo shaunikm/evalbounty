@@ -14,7 +14,9 @@
     "gen-fixtures": "tsx scripts/gen-fixtures.ts",
     "fund": "tsx src/deploy.ts --fund-only",
     "calibrate": "tsx scripts/calibrate.ts",
-    "deploy-contracts": "tsx src/deploy.ts"
+    "deploy-contracts": "tsx src/deploy.ts",
+    "fetch-datasets": "tsx scripts/fetch-datasets.ts",
+    "calibrate-families": "tsx scripts/calibrate-families.ts"
   },
   "dependencies": {
     "@openzeppelin/merkle-tree": "^1.0.8",

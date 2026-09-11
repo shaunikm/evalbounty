@@ -114,7 +114,7 @@ export async function buyerJudge(w: Wallet, id: bigint, provider: ModelProvider,
   const b = await c.read.getBounty([id]);
   const revealed = await revealedTasks(id);
   const expected = (await c.read.sampleIndices([id])).map(Number);
-  for (const r of revealed) log(who, `revealed task ${r.index} [${r.task.family}/d${r.task.difficulty}]: "${r.task.prompt.slice(0, 90)}${r.task.prompt.length > 90 ? "…" : ""}" -> ${r.task.reference}`);
+  for (const r of revealed) log(who, `revealed task ${r.index} [${r.task.family}${r.task.sourceId ? ` · ${r.task.sourceId}` : `/d${r.task.difficulty}`}]: "${r.task.prompt.replace(/\s+/g, " ").slice(0, 90)}${r.task.prompt.length > 90 ? "…" : ""}" -> ${r.task.reference}`);
   const v = await judgeSample(revealed, b.spec, expected, provider);
   for (const n of v.notes) log(who, `  · ${n}`);
   if (v.approve) {
