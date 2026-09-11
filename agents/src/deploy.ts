@@ -22,12 +22,14 @@ export const WINDOWS = {
 export const ARBITRATION_PRICE = parseEther("0.0002");
 const META_EVIDENCE_URI = "https://github.com/shaunikm/technical-interview/blob/main/dashboard/meta-evidence.json";
 
+// Enough for the four demo stories at ~1-2 gwei with margin; funded in this priority order.
 const FUNDING: { name: string; key: KeyName; target: bigint }[] = [
-  { name: "buyer", key: "BUYER_KEY", target: parseEther("0.012") },
-  { name: "seller", key: "SELLER_KEY", target: parseEther("0.007") },
+  { name: "buyer", key: "BUYER_KEY", target: parseEther("0.015") },
+  { name: "seller", key: "SELLER_KEY", target: parseEther("0.013") },
   { name: "arbiter", key: "ARBITER_KEY", target: parseEther("0.003") },
-  { name: "junkSeller", key: "JUNK_SELLER_KEY", target: parseEther("0.005") },
+  { name: "junkSeller", key: "JUNK_SELLER_KEY", target: parseEther("0.004") },
 ];
+const DEPLOYER_RESERVE = parseEther("0.002");
 
 export async function loadOrCreateArbiterKeys(): Promise<KeyPairHex> {
   mkdirSync(STATE_DIR, { recursive: true });
@@ -45,6 +47,31 @@ function setEnvVar(file: string, key: string, value: string) {
   writeFileSync(file, s);
 }
 
+
+/** Top agents up to their targets, in priority order, keeping a small reserve for the deployer. */
+export async function fundAgents(deployer = wallet(env.key("DEPLOYER_KEY"))) {
+  const pc = publicClient();
+  for (const f of FUNDING) {
+    const addr = env.address(f.key);
+    const have = await pc.getBalance({ address: addr });
+    if (have >= f.target) {
+      log("deploy", `${f.name} ${addr} already has ${eth(have)}`);
+      continue;
+    }
+    const deployerBal = await pc.getBalance({ address: deployer.account.address });
+    const available = deployerBal > DEPLOYER_RESERVE ? deployerBal - DEPLOYER_RESERVE : 0n;
+    const want = f.target - have;
+    const amount = want < available ? want : available;
+    if (amount <= 0n) {
+      log("deploy", `cannot fund ${f.name}: deployer is down to ${eth(deployerBal)}; top it up and rerun`);
+      continue;
+    }
+    const hash = await deployer.sendTransaction({ to: addr, value: amount });
+    await pc.waitForTransactionReceipt({ hash });
+    log("deploy", `funded ${f.name} ${addr} +${eth(amount)}${amount < want ? `  (short by ${eth(want - amount)})` : ""}`);
+  }
+}
+
 export interface Deployment {
   evalBountyAddress: Address;
   arbitratorAddress: Address;
@@ -60,9 +87,9 @@ export async function deploy(opts: { fund?: boolean; persist?: boolean } = {}): 
   const arbiterAddr = env.address("ARBITER_KEY");
   const bal = await pc.getBalance({ address: deployer.account.address });
   log("deploy", `chain=${env.chainName} deployer=${deployer.account.address} balance=${eth(bal)}`);
-  const need = fund ? parseEther("0.035") : parseEther("0.008");
+  const need = fund ? parseEther("0.02") : parseEther("0.008");
   if (bal < need) {
-    throw new Error(`deployer needs at least ${eth(need)}; has ${eth(bal)}. Fund ${deployer.account.address}`);
+    throw new Error(`deployer needs at least ${eth(need)} (0.05 recommended); has ${eth(bal)}. Fund ${deployer.account.address}`);
   }
 
   const arbiterKp = await loadOrCreateArbiterKeys();
@@ -85,19 +112,7 @@ export async function deploy(opts: { fund?: boolean; persist?: boolean } = {}): 
   const evalBountyAddress = r2.contractAddress as Address;
   log("deploy", `EvalBounty at ${evalBountyAddress} (block ${r2.blockNumber})  ${explorer.tx(h2)}`);
 
-  if (fund) {
-    for (const f of FUNDING) {
-      const addr = env.address(f.key);
-      const have = await pc.getBalance({ address: addr });
-      if (have >= f.target) {
-        log("deploy", `${f.name} ${addr} already has ${eth(have)}`);
-        continue;
-      }
-      const hash = await deployer.sendTransaction({ to: addr, value: f.target - have });
-      await pc.waitForTransactionReceipt({ hash });
-      log("deploy", `funded ${f.name} ${addr} +${eth(f.target - have)}`);
-    }
-  }
+  if (fund) await fundAgents(deployer);
 
   process.env.EVALBOUNTY_ADDRESS = evalBountyAddress;
   process.env.ARBITRATOR_ADDRESS = arbitratorAddress;
@@ -135,7 +150,8 @@ window.EVALBOUNTY_CONFIG = {
 }
 
 if (process.argv[1] && /deploy\.ts$/.test(process.argv[1])) {
-  deploy().catch((e) => {
+  const run = process.argv.includes("--fund-only") ? fundAgents() : deploy();
+  run.catch((e) => {
     console.error(e);
     process.exit(1);
   });
