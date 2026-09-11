@@ -12,7 +12,7 @@ ARBITER=$(cast wallet address --private-key "$ARBITER_KEY")
 ARBITER_PUB=$(python3 -c "import json;print(json.load(open('agents/state/arbiter-x25519.json'))['publicKey'])")
 PRICE=200000000000000   # 0.0002 ETH, must match agents/src/deploy.ts ARBITRATION_PRICE
 W_APPROVE=${APPROVE_WINDOW:-1800}; W_DELIVER=${DELIVER_WINDOW:-1800}; W_VERIFY=${VERIFY_WINDOW:-3600}; W_RULE=${RULE_WINDOW:-3600}
-META="https://github.com/shaunikm/technical-interview/blob/main/dashboard/meta-evidence.json"
+META="https://github.com/shaunikm/evalbounty/blob/main/dashboard/meta-evidence.json"
 
 ARB_ARGS=$(cast abi-encode "constructor(address,uint256,bytes32)" "$ARBITER" "$PRICE" "$ARBITER_PUB")
 EB_ARGS=$(cast abi-encode "constructor(address,address,(uint64,uint64,uint64,uint64),string)" "$ARBITRATOR_ADDRESS" "$DEPLOYER" "($W_APPROVE,$W_DELIVER,$W_VERIFY,$W_RULE)" "$META")
