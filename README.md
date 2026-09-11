@@ -24,7 +24,7 @@ Buyer:  decrypt, check keccak == commitment, rebuild root == taskRoot, RERUN the
 Anyone: finalize() past any deadline (slash / settle / split) so no party can lock funds
 ```
 
-Reputation counters (commits, rejected samples, abandoned commits, deliveries, timeouts, settlements, disputes won/lost, volume) accrue on-chain per address and are shown on the dashboard.
+Reputation counters (commits, rejected samples, abandoned commits, deliveries, timeouts, settlements, disputes won/lost, volume) accrue on-chain per address and are shown on the dashboard. The buyer agent reads a seller's record before spending a single model call on its sample and rejects on record alone when the record is worse than its successes (more disputes lost than trades settled, a majority of past samples rejected, or repeated missed deliveries; thresholds are configurable). Reputation is per address and addresses are free, so a bad seller can rotate; the bond already protects each single trade, and the honest framing is that reputation *lowers the bond a good seller needs over time* rather than keeping bad sellers out. The natural next step is reputation-scaled bonds inside the contract, and ERC-8004's identity and reputation registries are the hook that would make a record portable across markets.
 
 ## 3. Trust assumptions
 

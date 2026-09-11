@@ -110,6 +110,43 @@ export interface SampleVerdict {
   notes: string[];
 }
 
+/** On-chain seller record as returned by EvalBounty.sellerRep. */
+export interface SellerRecord {
+  commits: number;
+  samplesRejected: number;
+  commitsAbandoned: number;
+  delivered: number;
+  deliveryTimeouts: number;
+  settled: number;
+  disputesWon: number;
+  disputesLost: number;
+  volumeWei: bigint;
+}
+
+export function toSellerRecord(r: readonly [number, number, number, number, number, number, number, number, bigint]): SellerRecord {
+  return { commits: r[0], samplesRejected: r[1], commitsAbandoned: r[2], delivered: r[3], deliveryTimeouts: r[4], settled: r[5], disputesWon: r[6], disputesLost: r[7], volumeWei: r[8] };
+}
+
+/**
+ * Reputation policy: the buyer refuses to spend model calls on a seller whose record is worse than
+ * its successes. Relative rules, so an established seller with a few losses still trades while a
+ * fresh address is judged on its sample alone. Thresholds are env-tunable.
+ */
+export function assessSellerRecord(rep: SellerRecord): { ok: boolean; summary: string; reasons: string[] } {
+  const maxRejectRate = Number(process.env.BUYER_MAX_REJECT_RATE ?? 0.5);
+  const minCommitsForRate = Number(process.env.BUYER_MIN_COMMITS_FOR_RATE ?? 2);
+  const maxTimeouts = Number(process.env.BUYER_MAX_DELIVERY_TIMEOUTS ?? 2);
+  const reasons: string[] = [];
+  const priorCommits = rep.commits - 1; // the commit being judged is already counted
+  if (priorCommits >= minCommitsForRate && rep.samplesRejected / priorCommits > maxRejectRate) {
+    reasons.push(`${rep.samplesRejected} of ${priorCommits} previous samples were rejected`);
+  }
+  if (rep.disputesLost > rep.settled) reasons.push(`lost ${rep.disputesLost} disputes against ${rep.settled} settled trades`);
+  if (rep.deliveryTimeouts >= maxTimeouts) reasons.push(`missed delivery ${rep.deliveryTimeouts} times`);
+  const summary = `${priorCommits} prior commits, ${rep.samplesRejected} rejected, ${rep.settled} settled, ${rep.disputesLost} disputes lost, ${rep.deliveryTimeouts} timeouts, ${eth(rep.volumeWei)} volume`;
+  return { ok: reasons.length === 0, summary, reasons };
+}
+
 /** Objective checks + a strong-model spot check on the revealed tasks. No LLM judge needed. */
 export async function judgeSample(revealed: Revealed[], spec: { domainTag: string; strongModel: string; sampleSize: number }, expectedIdx: number[], provider: ModelProvider, runParams = DEFAULT_RUN_PARAMS): Promise<SampleVerdict> {
   const notes: string[] = [];
@@ -137,6 +174,15 @@ export async function judgeSample(revealed: Revealed[], spec: { domainTag: strin
 export async function buyerJudge(w: Wallet, id: bigint, provider: ModelProvider, who = "buyer") {
   const c = evalBounty(w);
   const b = await c.read.getBounty([id]);
+  // Reputation first: it is free, and a bad record means no model calls are spent on this seller.
+  const record = assessSellerRecord(toSellerRecord(await c.read.sellerRep([b.seller])));
+  log(who, `seller ${short(b.seller)} on-chain record: ${record.summary}`);
+  if (!record.ok) {
+    const reason = `seller record: ${record.reasons.join("; ")}`.slice(0, 200);
+    log(who, `rejecting sample of #${id} on record alone: ${record.reasons.join("; ")}`);
+    const verdict: SampleVerdict = { approve: false, notes: [reason] };
+    return { verdict, receipt: await tx(who, `rejectSample #${id}`, () => c.write.rejectSample([id, reason])) };
+  }
   const revealed = await revealedTasks(id);
   const expected = (await c.read.sampleIndices([id])).map(Number);
   for (const r of revealed) log(who, `revealed task ${r.index} [${r.task.family}${r.task.sourceId ? ` · ${r.task.sourceId}` : `/d${r.task.difficulty}`}]: "${r.task.prompt.replace(/\s+/g, " ").slice(0, 90)}${r.task.prompt.length > 90 ? "…" : ""}" -> ${r.task.reference}`);

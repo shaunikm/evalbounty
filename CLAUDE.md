@@ -120,6 +120,9 @@ nonce++ until k distinct. Leaf = `keccak256(bytes.concat(keccak256(abi.encode(in
 - **Tolerance ≥ 2·SE.** Reruns are noisy on real models; SE from resampling (Miller 2024). Mock provider is
   deterministic so the demo reproduces exactly.
 - **Timeouts everywhere + 50/50 split if the arbiter is offline.** No party can lock funds.
+- **Reputation does work off-chain first.** The buyer reads `sellerRep` before judging a sample and rejects on record
+  when losses exceed successes (`assessSellerRecord`, env-tunable). On-chain reputation-scaled bonds are the next step
+  (contract change); say plainly that per-address reputation is rotatable and the bond covers each single trade.
 - **Parallels, not dependencies:** ERC-8183 (client funds → provider submits → evaluator completes/rejects
   → expiry) matches our lifecycle shape; ERC-8004 registries exist on Sepolia (Identity
   0x8004A818BFB912233c491871b3d84c89A494BD9e, Reputation 0x8004B663056A597Dffe9eCcC1965A193B7388713) — optional bonus.
