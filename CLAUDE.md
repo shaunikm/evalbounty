@@ -155,7 +155,9 @@ nonce++ until k distinct. Leaf = `keccak256(bytes.concat(keccak256(abi.encode(in
   delivery, ~200 calls). Mitigations: per-process call budget, prefer the scripted `demo` over long-running
   loops when not recording, small N/runs in `defaultBuyerConfig`.
 - Deployed: EvalBounty 0x6b7f34fa4229aa9545b08c47d187415505c0e7a8, CentralizedArbitrator
-  0x5d16caa1e9789a996839aa44a4167b574b887653, Sepolia block 11679290.
+  0x5d16caa1e9789a996839aa44a4167b574b887653, Sepolia block 11679290; CommitteeArbitrator 0x522a3853bae72170be0dca60d141329bc5afd7f0
+  (minStake 0.0005, fee 0.0001, panel 3, windows 600s). The live market points at the committee since bounty #11, so
+  disputed demo stories need JUROR_KEYS set; the demo seats the panel itself, loop-mode agents need `pnpm jurors`.
 
 ## Known limitations (say them out loud)
 
