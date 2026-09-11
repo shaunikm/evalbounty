@@ -205,10 +205,15 @@ try {
     store = { lastBlock: parsed.lastBlock ? BigInt(parsed.lastBlock) : null, logs: parsed.logs.map(reviveLog) };
   }
 } catch {}
-function reviveLog(l) { return { ...l, blockNumber: BigInt(l.blockNumber), logIndex: Number(l.logIndex), transactionIndex: Number(l.transactionIndex ?? 0) }; }
-function persistLog(l) { return { ...l, blockNumber: l.blockNumber.toString() }; }
+// viem logs carry bigints (blockNumber, blockTimestamp); serialize them as strings and revive the ones we compare on.
+function reviveLog(l) { return { ...l, blockNumber: BigInt(l.blockNumber), blockTimestamp: l.blockTimestamp != null ? BigInt(l.blockTimestamp) : undefined, logIndex: Number(l.logIndex), transactionIndex: Number(l.transactionIndex ?? 0) }; }
+const bigintToString = (_k, v) => (typeof v === "bigint" ? v.toString() : v);
 function saveStore() {
-  try { localStorage.setItem(CACHE_KEY, JSON.stringify({ lastBlock: store.lastBlock?.toString() ?? null, logs: store.logs.map(persistLog) })); } catch {}
+  try {
+    localStorage.setItem(CACHE_KEY, JSON.stringify({ lastBlock: store.lastBlock?.toString() ?? null, logs: store.logs }, bigintToString));
+  } catch (err) {
+    console.warn("event cache not saved:", err?.message ?? err);
+  }
 }
 async function fetchLogsChunked(fromBlock, toBlock, chunk = 9_000n) {
   const out = [];
@@ -279,9 +284,11 @@ async function refresh() {
     const head = await client.getBlockNumber();
     await syncLogs(head);
     const events = parseEventLogs({ abi, logs: store.logs }).sort((x,y) => Number(x.blockNumber - y.blockNumber) || x.logIndex - y.logIndex);
+    // Block timestamps: from the logs when the RPC provides them, otherwise fetch the last few blocks.
     const blockTimes = {};
-    const uniqBlocks = [...new Set(events.map(e => e.blockNumber.toString()))].slice(-60);
-    await Promise.all(uniqBlocks.map(async bn => { const b = await client.getBlock({ blockNumber: BigInt(bn) }); blockTimes[bn] = Number(b.timestamp); }));
+    for (const l of store.logs) if (l.blockTimestamp != null) blockTimes[l.blockNumber.toString()] = Number(l.blockTimestamp);
+    const missing = [...new Set(events.map(e => e.blockNumber.toString()))].filter(bn => !blockTimes[bn]).slice(-60);
+    await Promise.all(missing.map(async bn => { try { const b = await client.getBlock({ blockNumber: BigInt(bn) }); blockTimes[bn] = Number(b.timestamp); } catch {} }));
 
     const count = Number(await client.readContract({ address: cfg.contractAddress, abi, functionName: "bountyCount" }));
     const bounties = await readMany(Array.from({length: count}, (_, i) => ({ address: cfg.contractAddress, abi, functionName: "getBounty", args: [BigInt(i)] })));
