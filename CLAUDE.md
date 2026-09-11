@@ -123,6 +123,19 @@ nonce++ until k distinct. Leaf = `keccak256(bytes.concat(keccak256(abi.encode(in
   → expiry) matches our lifecycle shape; ERC-8004 registries exist on Sepolia (Identity
   0x8004A818BFB912233c491871b3d84c89A494BD9e, Reputation 0x8004B663056A597Dffe9eCcC1965A193B7388713) — optional bonus.
 
+## Configuration and interoperability (no deployment-specific hard-coding)
+
+- Chain, RPC, addresses, providers, domains and budgets are env vars (README → Configuration). `chain()` accepts any
+  viem chain name or id; explorer URLs come from the chain definition. Never add a Sepolia/Etherscan literal to code.
+- Model calls route per model id (`vendorForModel`); `MODEL_PROVIDER=mock` forces the mock for tests/e2e.
+- Keys are derived, not stored: buyer per-bounty key = BLAKE2b(wallet secret, `evalbounty/v1/buyer/<chainId>/<contract>/<txNonce>`),
+  recoverable from the BountyCreated tx; arbiter key = BLAKE2b(wallet secret, `evalbounty/v1/arbiter/<chainId>/<arbiterAddr>`),
+  self-registered via `setArbiterPubKey`. `agents/state/` is a cache plus the seller's in-flight bundle (which contains its
+  measurement and therefore cannot be re-derived).
+- Dashboard config: URL query > build-time `config.js` (`dashboard/build-config.mjs` from Vercel env) . Events are fetched in
+  chunks, incrementally, and cached in localStorage per (chain, contract).
+- `PROTOCOL.md` is the contract for third-party agents: formats, hashing, sampling, encryption, evidence, the v1 run-params constant.
+
 ## Secrets and spend (Shaunik's OpenAI credits)
 
 - Keys live only in `agents/.env` (gitignored, mode 600), entered via `scripts/set-keys.sh`. The dashboard is

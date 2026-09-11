@@ -13,12 +13,12 @@
  */
 import { bytesToHex, type Address, type Hex } from "viem";
 import { bundleBytes, bundleCommitment, DEFAULT_RUN_PARAMS, runParamsHash, taskBytes, type Bundle } from "./lib/bundle.js";
-import { Status, StatusName, env, eth, evalBounty, log, publicClient, short, sleep, tx, waitForBlockAfter, wallet, type Wallet } from "./lib/chain.js";
-import { encryptBundle } from "./lib/crypto.js";
+import { Status, StatusName, chain, env, eth, evalBounty, log, publicClient, secretOf, short, sleep, tx, waitForBlockAfter, wallet, type Wallet } from "./lib/chain.js";
+import { deriveBytes32, encryptBundle } from "./lib/crypto.js";
 import { sampleTasks } from "./lib/datasets.js";
 import { generateJunkTasks, generateTasks } from "./lib/generators.js";
 import { buildTaskTree, proofForIndex, sampleIndicesFor, type TaskTree } from "./lib/merkle.js";
-import { getProvider, type ModelProvider } from "./lib/models.js";
+import { canRunModel, getProvider, type ModelProvider } from "./lib/models.js";
 import { loadState, saveState } from "./lib/state.js";
 import { fmt, insideBand, measureBundle, type ClaimSpec, type Transcript } from "./lib/verify.js";
 import { bountyCreatedEvents } from "./lib/events.js";
@@ -64,6 +64,26 @@ export interface PrepareOptions {
   /** Ship this difficulty regardless of the band and claim the band anyway (dishonest seller). */
   forceDifficulty?: number;
   who?: string;
+  /** Deterministic salt per attempt (derived from the seller wallet); random if omitted. */
+  saltFor?: (difficulty: number) => Promise<Hex>;
+}
+
+/** Domains this seller serves (SELLER_DOMAINS, comma-separated). */
+export function sellerDomains(): string[] {
+  return (process.env.SELLER_DOMAINS ?? "benchmark-reasoning,exact-answer-reasoning").split(",").map((s) => s.trim()).filter(Boolean);
+}
+
+/** Why this seller would not take a bounty, or null if it can. */
+export function cannotServe(spec: OnChainSpec): string | null {
+  if (!sellerDomains().includes(spec.domainTag)) return `domain "${spec.domainTag}" not in SELLER_DOMAINS`;
+  if (runParamsHash(DEFAULT_RUN_PARAMS) !== spec.runParamsHash) return "unknown runParamsHash (protocol v1 pins one value)";
+  for (const m of [spec.weakModel, spec.strongModel]) if (!canRunModel(m)) return `cannot run model "${m}" (no provider/key)`;
+  return null;
+}
+
+/** Salt derived from the seller wallet so bundles are reproducible per (bounty, difficulty). */
+export function sellerSalt(w: Wallet, id: bigint) {
+  return (difficulty: number) => deriveBytes32(secretOf(w), `evalbounty/v1/seller-salt/${chain().id}/${(env.evalBounty ?? "").toLowerCase()}/${id}/${difficulty}`);
 }
 
 function randomSalt(): Hex {
@@ -88,7 +108,7 @@ export async function prepareBundle(spec: OnChainSpec, provider: ModelProvider, 
     const tasks = gen({ seed: `${opts.seed}-d${difficulty}`, count: spec.taskCount, difficulty });
     const bundle: Bundle = {
       version: 1,
-      salt: randomSalt(),
+      salt: opts.saltFor ? await opts.saltFor(difficulty) : randomSalt(),
       domainTag: spec.domainTag,
       runParams: DEFAULT_RUN_PARAMS,
       tasks,
@@ -195,8 +215,13 @@ export async function runSeller(opts: { junk?: boolean; forceDifficulty?: number
         const mine = b.seller.toLowerCase() === w.account.address.toLowerCase();
         if (b.status === Status.Open && !attempted.has(id.toString())) {
           attempted.add(id.toString());
-          log(who, `new bounty #${id} from ${short(b.buyer)}: ${b.spec.domainTag}, ${b.spec.taskCount} tasks, reward ${eth(b.reward)}`);
-          const prep = await prepareBundle(b.spec, provider, { seed: `${w.account.address}-${id}`, junk: opts.junk, forceDifficulty: opts.forceDifficulty, who });
+          log(who, `new bounty #${id} from ${short(b.buyer)}: ${b.spec.domainTag}, ${b.spec.taskCount} tasks, ${b.spec.weakModel} vs ${b.spec.strongModel}, reward ${eth(b.reward)}`);
+          const why = cannotServe(b.spec);
+          if (why) {
+            log(who, `skipping #${id}: ${why}`);
+            continue;
+          }
+          const prep = await prepareBundle(b.spec, provider, { seed: `${w.account.address}-${id}`, junk: opts.junk, forceDifficulty: opts.forceDifficulty, who, saltFor: sellerSalt(w, id) });
           await sellerCommit(w, id, prep, who);
           await sellerReveal(w, id, prep, who);
         } else if (mine && b.status === Status.Approved) {
@@ -219,7 +244,7 @@ export async function runSeller(opts: { junk?: boolean; forceDifficulty?: number
       log(who, `error: ${(e as Error).message}`);
     }
     if (opts.once) return;
-    await sleep(env.chainName === "sepolia" ? 8000 : 1500);
+    await sleep(env.chainName === "anvil" ? 1500 : 8000);
   }
 }
 

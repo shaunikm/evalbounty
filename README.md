@@ -55,6 +55,20 @@ Sepolia: `./scripts/set-keys.sh` puts any keys into `agents/.env` with hidden in
 
 Dashboard hosting: `dashboard/` is a static site that reads only contract events through a public RPC. `vercel.json` serves it with no build step, so `npx vercel --prod` from the repo root (after `npx vercel login`) publishes it; importing the GitHub repo in the Vercel dashboard works the same way and redeploys on push. `.github/workflows/pages.yml` is an equivalent GitHub Pages deployment if preferred.
 
+## Configuration (nothing is hard-coded to this deployment)
+
+| Where | Setting | Meaning |
+|---|---|---|
+| `agents/.env` | `CHAIN` | viem chain name or id (`sepolia`, `anvil`, `baseSepolia`, `11155111`); explorer links come from the chain definition |
+| | `RPC_URL`, `EVALBOUNTY_ADDRESS`, `ARBITRATOR_ADDRESS`, `DEPLOY_BLOCK` | written by `deploy-contracts`; point agents at any deployment |
+| | `MODEL_PROVIDER` | `auto` (route each model id to its vendor: `claude-*` → Anthropic, `gpt-*`/`o*` → OpenAI, `mock-*` → mock), or `mock` to force the keyless mock |
+| | `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `MODEL_CALL_BUDGET`, `OPENAI_REASONING_EFFORT` | vendor keys, per-process spend cap (default 3000 calls), reasoning effort |
+| | `SELLER_DOMAINS`, `BUYER_DOMAIN`, `TASK_SOURCE` | domains a seller serves; the buyer's domain tag; `real` (BBH + GSM8K snapshots) or `synthetic` |
+| Dashboard URL | `?contract=0x…&chain=11155111&from=<deployBlock>&rpc=…` | inspect any EvalBounty deployment on any chain; overrides `config.js` |
+| Vercel env | `EVALBOUNTY_ADDRESS`, `ARBITRATOR_ADDRESS`, `DEPLOY_BLOCK`, `CHAIN_ID`, `RPC_URL` | `dashboard/build-config.mjs` writes `config.js` at build time when set |
+
+Keys are never stored: the buyer derives each bounty's X25519 key from its wallet key and the creating transaction's nonce (recoverable from the chain), and the arbiter derives its key from its wallet and registers it on the arbitrator contract. The dashboard fetches events incrementally in provider-safe block windows and caches raw logs per (chain, contract) in the browser, so history survives RPC range limits; the chain stays the source of truth. Interoperability rules for third-party agents are in [PROTOCOL.md](PROTOCOL.md).
+
 ## What is reused, and what parallels exist
 
 OpenZeppelin `MerkleProof` + `@openzeppelin/merkle-tree` (leaf format `keccak256(bytes.concat(keccak256(abi.encode(index, keccak256(task)))))`), `Ownable`, `ReentrancyGuard`; libsodium `crypto_secretbox` + `crypto_box_seal` for hybrid encryption; RFC 8785 canonical JSON so all parties hash identical bytes; viem + Foundry. The lifecycle parallels ERC-8183 (*Agentic Commerce*: client funds → provider submits → evaluator completes/rejects → expiry) and disputes speak ERC-792/ERC-1497 (Kleros). ERC-8004 identity/reputation registries exist on Sepolia and could hold the reputation counters; here they stay in the market contract to keep the trust surface small.

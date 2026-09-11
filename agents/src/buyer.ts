@@ -10,9 +10,9 @@
 import { bytesToHex, decodeEventLog, encodeAbiParameters, hexToBytes, keccak256, parseEther, parseEventLogs, type Hex } from "viem";
 import { evalBountyAbi } from "./lib/abi.js";
 import { grade, objectiveTaskChecks, parseBundle, runParamsHash, DEFAULT_RUN_PARAMS, type Task } from "./lib/bundle.js";
-import { DisputeKind, Status, StatusName, arbitrator, env, eth, evalBounty, log, short, sleep, tx, wallet, type Wallet } from "./lib/chain.js";
-import { decryptBundle, generateKeyPair, publicKeyFromSecret, sealKeyTo, type KeyPairHex } from "./lib/crypto.js";
-import { deliveredCiphertext, revealedTasks, type Revealed } from "./lib/events.js";
+import { DisputeKind, Status, StatusName, arbitrator, chain, env, eth, evalBounty, log, publicClient, secretOf, short, sleep, tx, wallet, type Wallet } from "./lib/chain.js";
+import { decryptBundle, deriveKeyPair, publicKeyFromSecret, sealKeyTo, type KeyPairHex } from "./lib/crypto.js";
+import { bountyCreatedEvents, deliveredCiphertext, revealedTasks, type Revealed } from "./lib/events.js";
 import { buildTaskTree } from "./lib/merkle.js";
 import { defaultModels, getProvider, providerName, type ModelProvider } from "./lib/models.js";
 import { loadState, saveState } from "./lib/state.js";
@@ -36,7 +36,7 @@ export interface BuyerConfig {
 export function defaultBuyerConfig(provider = providerName()): BuyerConfig {
   const m = defaultModels(provider);
   return {
-    domainTag: "exact-answer-reasoning",
+    domainTag: process.env.BUYER_DOMAIN ?? "benchmark-reasoning",
     taskCount: 30,
     sampleSize: 4,
     weakModel: m.weak,
@@ -53,11 +53,35 @@ export function defaultBuyerConfig(provider = providerName()): BuyerConfig {
 export interface BountyState {
   kp: KeyPairHex;
   createdTx: Hex;
+  nonce?: number;
+}
+
+/**
+ * Per-bounty X25519 keys are derived from the buyer's wallet key and the nonce of the transaction
+ * that created the bounty, so nothing has to be stored: the nonce is recoverable from the chain.
+ */
+function buyerKeyContext(nonce: number): string {
+  return `evalbounty/v1/buyer/${chain().id}/${(env.evalBounty ?? "").toLowerCase()}/${nonce}`;
+}
+
+export async function keyPairForBounty(w: Wallet, id: bigint): Promise<KeyPairHex> {
+  const cached = loadState<BountyState>(`buyer-bounty-${id}`);
+  if (cached?.kp) return cached.kp;
+  const ev = (await bountyCreatedEvents()).find((e) => e.args.id === id);
+  if (!ev) throw new Error(`no BountyCreated event for #${id}`);
+  const t = await publicClient().getTransaction({ hash: ev.transactionHash });
+  const kp = await deriveKeyPair(secretOf(w), buyerKeyContext(t.nonce));
+  if (kp.publicKey.toLowerCase() !== ev.args.buyerPubKey.toLowerCase()) {
+    throw new Error(`derived key for #${id} does not match the on-chain buyerPubKey (created with a different wallet or scheme)`);
+  }
+  saveState(`buyer-bounty-${id}`, { kp, createdTx: ev.transactionHash, nonce: t.nonce } satisfies BountyState);
+  return kp;
 }
 
 export async function createBounty(w: Wallet, cfg: BuyerConfig, who = "buyer"): Promise<bigint> {
   const c = evalBounty(w);
-  const kp = await generateKeyPair();
+  const nonce = await publicClient().getTransactionCount({ address: w.account.address, blockTag: "pending" });
+  const kp = await deriveKeyPair(secretOf(w), buyerKeyContext(nonce));
   const spec = {
     domainTag: cfg.domainTag,
     taskCount: cfg.taskCount,
@@ -72,11 +96,12 @@ export async function createBounty(w: Wallet, cfg: BuyerConfig, who = "buyer"): 
     runParamsHash: runParamsHash(DEFAULT_RUN_PARAMS),
   };
   log(who, `posting bounty: ${cfg.taskCount} ${cfg.domainTag} tasks, reveal ${cfg.sampleSize}, band weak(${cfg.weakModel})<=${fmt(cfg.weakMaxBps)} strong(${cfg.strongModel})>=${fmt(cfg.strongMinBps)} null<=${fmt(cfg.nullMaxBps)}, ±${fmt(cfg.toleranceBps)}, reward ${eth(cfg.rewardWei)}`);
-  const r = await tx(who, "createBounty", () => c.write.createBounty([spec, kp.publicKey as Hex], { value: cfg.rewardWei }));
+  // Pin the nonce so the key derivation and the transaction agree even if another tx is in flight.
+  const r = await tx(who, "createBounty", () => c.write.createBounty([spec, kp.publicKey as Hex], { value: cfg.rewardWei, nonce }));
   const logs = parseEventLogs({ abi: evalBountyAbi, logs: r.logs, eventName: "BountyCreated" });
   const id = logs[0]!.args.id;
-  saveState(`buyer-bounty-${id}`, { kp, createdTx: r.transactionHash } satisfies BountyState);
-  log(who, `bounty #${id} is Open; my delivery key is ${short(kp.publicKey)} (secret stays local)`);
+  saveState(`buyer-bounty-${id}`, { kp, createdTx: r.transactionHash, nonce } satisfies BountyState); // cache only; re-derivable
+  log(who, `bounty #${id} is Open; delivery key ${short(kp.publicKey)} derived from my wallet + tx nonce ${nonce} (nothing to store)`);
   return id;
 }
 
@@ -186,11 +211,10 @@ export async function verifyDelivery(id: bigint, ciphertext: Uint8Array, kp: Key
 
 export async function buyerVerify(w: Wallet, id: bigint, provider: ModelProvider, who = "buyer") {
   const c = evalBounty(w);
-  const st = loadState<BountyState>(`buyer-bounty-${id}`);
-  if (!st) throw new Error(`no local key for bounty #${id}`);
+  const kp = await keyPairForBounty(w, id);
   const { ciphertext, txHash } = await deliveredCiphertext(id);
   log(who, `fetched ${ciphertext.length}-byte ciphertext from the Delivered event (tx ${short(txHash)})`);
-  const verdict = await verifyDelivery(id, ciphertext, st.kp, provider, who);
+  const verdict = await verifyDelivery(id, ciphertext, kp, provider, who);
   saveState(`buyer-verdict-${id}`, verdict);
   if (verdict.action === "accept") {
     return { verdict, receipt: await tx(who, `accept #${id}`, () => c.write.accept([id])) };
@@ -214,7 +238,7 @@ export async function runBuyer(cfg = defaultBuyerConfig(), opts: { maxBounties?:
   const count = await c.read.bountyCount();
   for (let i = 0n; i < count; i++) {
     const b = await c.read.getBounty([i]);
-    if (b.buyer.toLowerCase() === w.account.address.toLowerCase() && loadState(`buyer-bounty-${i}`)) mine.push(i);
+    if (b.buyer.toLowerCase() === w.account.address.toLowerCase()) mine.push(i); // keys are re-derivable, no local file needed
   }
   for (;;) {
     try {
@@ -244,7 +268,7 @@ export async function runBuyer(cfg = defaultBuyerConfig(), opts: { maxBounties?:
       log(who, `error: ${(e as Error).message}`);
     }
     if (opts.once) return;
-    await sleep(env.chainName === "sepolia" ? 8000 : 1500);
+    await sleep(env.chainName === "anvil" ? 1500 : 8000);
   }
 }
 

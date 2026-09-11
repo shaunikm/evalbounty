@@ -73,6 +73,25 @@ export async function decryptWithKey(ciphertext: Uint8Array, key: Uint8Array): P
   return s.crypto_secretbox_open_easy(ct, nonce, key);
 }
 
+/**
+ * Deterministic X25519 keypair from a wallet secret and a context string, so agents never have to
+ * store per-bounty keys: seed = BLAKE2b-256(key = walletSecret, msg = context).
+ * Contexts are namespaced ("evalbounty/v1/buyer/<chainId>/<contract>/<nonce>") so keys for
+ * different chains, contracts and bounties are unrelated.
+ */
+export async function deriveKeyPair(walletSecret: Hex, context: string): Promise<KeyPairHex> {
+  const s = await sodium();
+  const seed = s.crypto_generichash(32, s.from_string(context), hexToBytes(walletSecret));
+  const kp = s.crypto_box_seed_keypair(seed);
+  return { publicKey: bytesToHex(kp.publicKey), secretKey: bytesToHex(kp.privateKey) };
+}
+
+/** 32 deterministic bytes for a context (e.g. a bundle salt), as hex. */
+export async function deriveBytes32(walletSecret: Hex, context: string): Promise<Hex> {
+  const s = await sodium();
+  return bytesToHex(s.crypto_generichash(32, s.from_string(context), hexToBytes(walletSecret)));
+}
+
 /** X25519 public key for a secret key; used to bind published evidence to the on-chain buyerPubKey. */
 export async function publicKeyFromSecret(secretKey: Hex): Promise<Hex> {
   const s = await sodium();

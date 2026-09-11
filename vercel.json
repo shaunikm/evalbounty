@@ -2,7 +2,7 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": null,
   "installCommand": "",
-  "buildCommand": "",
+  "buildCommand": "node dashboard/build-config.mjs",
   "outputDirectory": "dashboard",
   "cleanUrls": true,
   "headers": [
