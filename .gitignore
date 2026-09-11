@@ -10,3 +10,4 @@ dashboard/node_modules/
 .DS_Store
 dashboard/config.local.js
 .vercel
+.claude/worktrees/

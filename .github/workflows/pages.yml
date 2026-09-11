@@ -1,8 +1,7 @@
+# Fallback hosting only. The dashboard is deployed on Vercel (see vercel.json); run this manually
+# after enabling Pages (Settings → Pages → Source: GitHub Actions) if Vercel is ever unavailable.
 name: pages
 on:
-  push:
-    branches: [main]
-    paths: ["dashboard/**", ".github/workflows/pages.yml"]
   workflow_dispatch:
 permissions:
   contents: read

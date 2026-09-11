@@ -1,20 +1,36 @@
 name: ci
-on: [push, pull_request]
+on:
+  push:
+    branches: [main]
+  pull_request:
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
   test:
     runs-on: ubuntu-latest
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
         with: { submodules: recursive }
       - uses: foundry-rs/foundry-toolchain@v1
+      # pnpm version comes from package.json "packageManager"; do not also pass `version` here.
       - uses: pnpm/action-setup@v4
-        with: { version: 10 }
       - uses: actions/setup-node@v4
         with: { node-version: 22, cache: pnpm }
       - run: pnpm install --frozen-lockfile
-      - run: forge build --root contracts
-      - run: pnpm --filter agents gen-abi && pnpm --filter agents gen-fixtures
-      - run: forge test --root contracts -vv
-      - run: pnpm --filter agents typecheck
-      - run: pnpm --filter agents test
-      - run: pnpm --filter agents e2e
+      - name: No secrets in tracked files or dashboard
+        run: ./scripts/check-no-secrets.sh
+      - name: Build contracts and regenerate ABI + cross-language fixtures
+        run: |
+          forge build --root contracts
+          pnpm --filter agents gen-abi
+          pnpm --filter agents gen-fixtures
+      - name: Solidity tests (unit, fuzz, TS<->Solidity fixtures)
+        run: forge test --root contracts -vv
+      - name: TypeScript typecheck + unit tests
+        run: |
+          pnpm --filter agents typecheck
+          pnpm --filter agents test
+      - name: End-to-end on anvil (4 stories, mock models)
+        run: pnpm --filter agents e2e

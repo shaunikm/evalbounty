@@ -141,13 +141,32 @@ export const eth = (wei: bigint) => `${(Number(wei) / 1e18).toFixed(4)} ETH`;
 
 // ------------------------------------------------------------------ tx helper
 
-/** Send a write, wait for the receipt, log an explorer link, return the receipt. */
-export async function tx(who: string, label: string, send: () => Promise<Hex>) {
-  const hash = await send();
-  const receipt = await publicClient().waitForTransactionReceipt({ hash, confirmations: 1 });
-  if (receipt.status !== "success") throw new Error(`${label} reverted: ${hash}`);
-  log(who, `${label}  ${explorer.tx(hash)}`);
-  return receipt;
+const TRANSIENT = /HttpRequestError|TimeoutError|fetch failed|ECONNRESET|ETIMEDOUT|socket hang up|429|502|503|504|rate limit|nonce too low|replacement transaction underpriced|already known/i;
+
+/**
+ * Send a write, wait for the receipt, log an explorer link, return the receipt.
+ * Network-level failures (public RPC hiccups, rate limits, nonce races) are retried with backoff;
+ * contract reverts are not, because they mean the state machine disagrees and retrying is wrong.
+ */
+export async function tx(who: string, label: string, send: () => Promise<Hex>, attempts = 4) {
+  let lastErr: unknown;
+  for (let i = 1; i <= attempts; i++) {
+    try {
+      const hash = await send();
+      const receipt = await publicClient().waitForTransactionReceipt({ hash, confirmations: 1, timeout: 600_000 });
+      if (receipt.status !== "success") throw new Error(`${label} reverted: ${hash}`);
+      log(who, `${label}  ${explorer.tx(hash)}`);
+      return receipt;
+    } catch (e) {
+      lastErr = e;
+      const msg = `${(e as Error).name ?? ""} ${(e as Error).message ?? ""}`;
+      if (i === attempts || !TRANSIENT.test(msg)) throw e;
+      const wait = 3000 * i;
+      log(who, `${label}: transient RPC error (${msg.split("\n")[0].slice(0, 90)}); retry ${i}/${attempts - 1} in ${wait / 1000}s`);
+      await sleep(wait);
+    }
+  }
+  throw lastErr;
 }
 
 export async function sleep(ms: number) {
