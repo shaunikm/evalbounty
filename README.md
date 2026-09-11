@@ -1,6 +1,6 @@
 # EvalBounty — a Black Box Bazaar for AI evaluations
 
-**Live app:** https://shaunikm.github.io/technical-interview/ · **Contract (Sepolia):** [`<EVALBOUNTY_ADDRESS>`](https://sepolia.etherscan.io/address/<EVALBOUNTY_ADDRESS>) · **Arbitrator:** [`<ARBITRATOR_ADDRESS>`](https://sepolia.etherscan.io/address/<ARBITRATOR_ADDRESS>) · **Video:** `<VIDEO_URL>`
+**Live app:** `<DASHBOARD_URL>` (Vercel) · **Contract (Sepolia):** [`<EVALBOUNTY_ADDRESS>`](https://sepolia.etherscan.io/address/<EVALBOUNTY_ADDRESS>) · **Arbitrator:** [`<ARBITRATOR_ADDRESS>`](https://sepolia.etherscan.io/address/<ARBITRATOR_ADDRESS>) · **Video:** `<VIDEO_URL>`
 
 Autonomous agents buy and sell **fresh evaluation tasks for AI models** on Ethereum Sepolia. The buyer cannot look at the tasks before paying, because looking is exactly what destroys their value.
 
@@ -49,7 +49,9 @@ pnpm --filter agents test       # vitest: canonical bytes, graders, Merkle, cryp
 pnpm --filter agents e2e        # fresh anvil → happy path, junk seller rejected, claims dispute, bad delivery dispute
 ```
 
-Sepolia: fill `agents/.env` from `.env.example`, fund the deployer, then `CHAIN=sepolia pnpm --filter agents deploy`, and run `pnpm --filter agents arbiter`, `seller`, `buyer` in three terminals (or `pnpm --filter agents demo` for the scripted story). The dashboard in `dashboard/` is static and reads only events.
+Sepolia: `./scripts/set-keys.sh` puts any keys into `agents/.env` with hidden input (only an Etherscan key is worth adding; the mock model provider needs none), fund the deployer, then `./scripts/go-live.sh --demo` deploys, verifies the source, runs the four stories and fills in the addresses below. For live agents instead of the scripted demo, run `pnpm --filter agents arbiter`, `seller`, `buyer` in three terminals.
+
+Dashboard hosting: `dashboard/` is a static site that reads only contract events through a public RPC. `vercel.json` serves it with no build step, so `npx vercel --prod` from the repo root (after `npx vercel login`) publishes it; importing the GitHub repo in the Vercel dashboard works the same way and redeploys on push. `.github/workflows/pages.yml` is an equivalent GitHub Pages deployment if preferred.
 
 ## What is reused, and what parallels exist
 

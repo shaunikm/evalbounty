@@ -1,0 +1,7 @@
+# Only dashboard/ is served; keep the upload small.
+contracts
+agents
+scripts
+node_modules
+.github
+*.md

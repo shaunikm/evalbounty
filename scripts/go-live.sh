@@ -30,4 +30,12 @@ echo
 echo "EvalBounty:  https://sepolia.etherscan.io/address/$EVALBOUNTY_ADDRESS"
 echo "Arbitrator:  https://sepolia.etherscan.io/address/$ARBITRATOR_ADDRESS"
 echo "Dashboard config written to dashboard/config.js; README addresses filled in."
-echo "Next: commit, make the repo public, enable Pages (Settings → Pages → Source: GitHub Actions), record the video, paste its URL into README.md."
+if command -v vercel >/dev/null 2>&1 && vercel whoami >/dev/null 2>&1; then
+  echo "Deploying dashboard to Vercel…"
+  vercel --prod --yes | tee /tmp/vercel-deploy.log
+  URL=$(grep -Eo 'https://[a-z0-9.-]+\.vercel\.app' /tmp/vercel-deploy.log | tail -1 || true)
+  [[ -n "$URL" ]] && sed -i '' "s|<DASHBOARD_URL>|$URL|g" README.md && echo "README dashboard URL set to $URL"
+else
+  echo "Vercel: run 'npx vercel login' once, then 'npx vercel --prod' from the repo root (vercel.json serves dashboard/)."
+fi
+echo "Next: commit + push, make the repo public, record the video, paste its URL into README.md, submit the form."

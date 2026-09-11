@@ -31,11 +31,13 @@ set_var() { # key value
   fi
   cat "$tmp" > "$ENV_FILE"; rm -f "$tmp"
 }
-mask() { local v=$1; [[ -z "$v" ]] && { echo "(unset)"; return; }; echo "${v:0:4}…${v: -3} (${#v} chars)"; }
+mask() { # secrets are masked; plain settings (RPC_URL, MODEL_PROVIDER) shown as-is
+  local v=$1 k=${2:-KEY}; [[ -z "$v" ]] && { echo "(unset)"; return; }
+  [[ "$k" == *KEY* ]] && echo "${v:0:4}…${v: -3} (${#v} chars)" || echo "$v"; }
 current() { grep "^$1=" "$ENV_FILE" | head -1 | cut -d= -f2- || true; }
 
 if [[ "${1:-}" == "--show" ]]; then
-  for entry in "${KEYS[@]}"; do k=${entry%%|*}; printf '%-20s %s\n' "$k" "$(mask "$(current "$k")")"; done
+  for entry in "${KEYS[@]}"; do k=${entry%%|*}; printf '%-20s %s\n' "$k" "$(mask "$(current "$k")" "$k")"; done
   printf '%-20s %s\n' "EVALBOUNTY_ADDRESS" "$(current EVALBOUNTY_ADDRESS)"
   exit 0
 fi
@@ -47,7 +49,7 @@ for entry in "${KEYS[@]}"; do
   cur=$(current "$key")
   echo
   echo "$key  —  $hint"
-  echo "  current: $(mask "$cur")"
+  echo "  current: $(mask "$cur" "$key")"
   printf '  new value (hidden; Enter to keep, "-" to clear): '
   read -rs val; echo
   [[ -z "$val" ]] && { echo "  kept"; continue; }
@@ -55,7 +57,7 @@ for entry in "${KEYS[@]}"; do
   if [[ -n "$pattern" && ! "$val" =~ $pattern ]]; then
     echo "  that does not look like a valid $key (expected to match $pattern); not saved"; continue
   fi
-  set_var "$key" "$val"; echo "  saved ($(mask "$val"))"
+  set_var "$key" "$val"; echo "  saved ($(mask "$val" "$key"))"
 done
 echo
 echo "agents/.env updated (gitignored, mode 600). Check with: ./scripts/set-keys.sh --show"
