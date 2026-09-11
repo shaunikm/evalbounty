@@ -163,7 +163,7 @@ export async function runArbiter(opts: { who?: string; once?: boolean } = {}) {
 }
 
 if (process.argv[1] && /arbiter\.ts$/.test(process.argv[1])) {
-  runArbiter().catch((e) => {
+  runArbiter({ once: process.argv.includes("--once") }).catch((e) => {
     console.error(e);
     process.exit(1);
   });
