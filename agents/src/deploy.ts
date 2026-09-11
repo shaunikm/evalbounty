@@ -23,9 +23,10 @@ export const ARBITRATION_PRICE = parseEther("0.0002");
 const META_EVIDENCE_URI = "https://github.com/shaunikm/technical-interview/blob/main/dashboard/meta-evidence.json";
 
 // Enough for the four demo stories at ~1-2 gwei with margin; funded in this priority order.
+// Real-item bundles are ~23 KB, so a delivery costs ~1M gas; the seller needs the most headroom.
 const FUNDING: { name: string; key: KeyName; target: bigint }[] = [
   { name: "buyer", key: "BUYER_KEY", target: parseEther("0.015") },
-  { name: "seller", key: "SELLER_KEY", target: parseEther("0.013") },
+  { name: "seller", key: "SELLER_KEY", target: parseEther("0.02") },
   { name: "arbiter", key: "ARBITER_KEY", target: parseEther("0.003") },
   { name: "junkSeller", key: "JUNK_SELLER_KEY", target: parseEther("0.004") },
 ];

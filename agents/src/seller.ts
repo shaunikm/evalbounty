@@ -251,7 +251,7 @@ export async function runSeller(opts: { junk?: boolean; forceDifficulty?: number
 if (process.argv[1] && /seller\.ts$/.test(process.argv[1])) {
   const junk = process.argv.includes("--junk");
   const easy = process.argv.includes("--easy");
-  runSeller({ junk, forceDifficulty: easy ? 1 : undefined }).catch((e) => {
+  runSeller({ junk, forceDifficulty: easy ? 1 : undefined, once: process.argv.includes("--once") }).catch((e) => {
     console.error(e);
     process.exit(1);
   });
