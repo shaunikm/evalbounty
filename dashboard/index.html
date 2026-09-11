@@ -151,8 +151,12 @@ const abi = window.EVALBOUNTY_ABI;
 const $ = (s) => document.querySelector(s);
 const STATUS = ["Open","Committed","Sampled","Approved","Delivered","Disputed","Settled","Refunded","Cancelled"];
 const short = (a) => a ? `${a.slice(0,6)}…${a.slice(-4)}` : "—";
-const addrLink = (a) => a && a !== "0x0000000000000000000000000000000000000000" ? `<a class="mono" href="${cfg.explorerBase}/address/${a}" target="_blank" rel="noopener">${short(a)}${label(a)}</a>` : `<span class="muted">—</span>`;
-const txLink = (h, text="tx") => `<a class="mono" href="${cfg.explorerBase}/tx/${h}" target="_blank" rel="noopener">${text}</a>`;
+// Without an explorer (local anvil preview) show plain text instead of dead relative links.
+const hasExplorer = !!cfg.explorerBase;
+const addrLink = (a) => !a || a === "0x0000000000000000000000000000000000000000" ? `<span class="muted">—</span>`
+  : hasExplorer ? `<a class="mono" href="${cfg.explorerBase}/address/${a}" target="_blank" rel="noopener">${short(a)}${label(a)}</a>`
+  : `<span class="mono" title="${a}">${short(a)}${label(a)}</span>`;
+const txLink = (h, text="tx") => hasExplorer ? `<a class="mono" href="${cfg.explorerBase}/tx/${h}" target="_blank" rel="noopener">${text}</a>` : `<span class="muted mono" title="${h}">${text === "↗" ? "" : text}</span>`;
 const pct = (bps) => `${(Number(bps)/100).toFixed(0)}%`;
 const eth = (wei) => `${Number(formatEther(wei)).toFixed(4)} ETH`;
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
@@ -219,7 +223,7 @@ async function refresh() {
     const byId = {};
     for (const e of events) { const id = e.args?.id?.toString(); if (id !== undefined) (byId[id] ??= []).push(e); }
 
-    $("#statusbar").innerHTML = `<span class="dot"></span><span>${chain.name} · block ${head}</span><span>contract ${addrLink(cfg.contractAddress)} · <a href="${cfg.explorerBase}/address/${cfg.contractAddress}#code" target="_blank" rel="noopener">verified source</a></span><span>arbitrator ${addrLink(cfg.arbitratorAddress)}</span><span>${events.length} events · refreshed ${new Date().toLocaleTimeString()}</span>`;
+    $("#statusbar").innerHTML = `<span class="dot"></span><span>${chain.name} · block ${head}</span><span>contract ${addrLink(cfg.contractAddress)}${hasExplorer ? ` · <a href="${cfg.explorerBase}/address/${cfg.contractAddress}#code" target="_blank" rel="noopener">verified source</a>` : " (local anvil preview)"}</span><span>arbitrator ${addrLink(cfg.arbitratorAddress)}</span><span>${events.length} events · refreshed ${new Date().toLocaleTimeString()}</span>`;
 
     // bounties
     const tbody = $("#bounties tbody"); tbody.innerHTML = "";
