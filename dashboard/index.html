@@ -91,6 +91,30 @@
   .copy-16 { font-size: 16px; line-height: 24px; } .copy-13 { font-size: 13px; line-height: 18px; }
   .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
 
+  /* ---------- motion ---------- */
+  @keyframes rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+  @keyframes fade { to { opacity: 1; } }
+  @keyframes draw { to { stroke-dashoffset: 0; } }
+  @keyframes grow { from { transform: scaleY(0); } to { transform: scaleY(1); } }
+  @keyframes shimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+  .in { animation: rise .55s cubic-bezier(.2,.7,.2,1) both; animation-delay: var(--d, 0ms); }
+  .spark path.line { stroke-dasharray: none; }
+  .tile.in .spark path.line { stroke-dasharray: 1; stroke-dashoffset: 1; animation: draw 1.1s cubic-bezier(.2,.7,.2,1) .25s forwards; }
+  .tile.in .spark path.area, .tile.in .spark circle { opacity: 0; animation: fade .5s ease-out forwards; }
+  .tile.in .spark path.area { animation-delay: .8s; } .tile.in .spark circle { animation-delay: 1.2s; }
+  .chart .stack { transform-box: fill-box; transform-origin: 50% 100%; }
+  .chart.animate .stack { animation: grow .6s cubic-bezier(.2,.7,.2,1) both; animation-delay: calc(var(--i) * 14ms); }
+  .chart.animate .axis, .chart.animate .grid, .chart.animate .base { opacity: 0; animation: fade .5s ease-out .1s forwards; }
+  .funnel .bar i { transition: width .9s cubic-bezier(.2,.7,.2,1); }
+  .funnel .n { transition: background .3s, color .3s, border-color .3s; }
+  .skel { position: relative; overflow: hidden; border-radius: 6px; background: var(--gray-100); color: transparent !important; }
+  .skel::after { content: ""; position: absolute; inset: 0; background: linear-gradient(90deg, transparent 0%, var(--gray-a400) 50%, transparent 100%); background-size: 200% 100%; animation: shimmer 1.4s linear infinite; }
+  .skel * { visibility: hidden; }
+  @media (prefers-reduced-motion: reduce) {
+    .in, .tile.in .spark path.line, .tile.in .spark path.area, .tile.in .spark circle, .chart.animate .stack, .chart.animate .axis, .chart.animate .grid, .chart.animate .base, .skel::after { animation: none !important; opacity: 1; stroke-dasharray: none; transform: none; }
+    .funnel .bar i, .funnel .n { transition: none; }
+  }
+
   /* ---------- top bar ---------- */
   .topbar { position: sticky; top: 0; z-index: 20; background: color-mix(in srgb, var(--bg-100) 82%, transparent); backdrop-filter: saturate(180%) blur(12px); -webkit-backdrop-filter: saturate(180%) blur(12px); border-bottom: 1px solid var(--gray-a400); }
   .topbar .wrap { display: flex; align-items: center; gap: 20px; height: 56px; }
@@ -352,7 +376,7 @@
     <span class="cross" style="left:15px;top:-9px"></span><span class="cross" style="right:15px;top:-9px"></span>
     <span class="cross" style="left:15px;bottom:-9px"></span><span class="cross" style="right:15px;bottom:-9px"></span>
     <div>
-      <div class="eyebrow"><span class="badge blue">Black Box Bazaar</span><span class="badge">B@B Fa'26 take-home</span></div>
+      <div class="in" style="--d:0ms"><div class="eyebrow"><span class="badge blue">Black Box Bazaar</span><span class="badge">B@B Fa'26 take-home</span></div>
       <h1 class="h48">A sealed market for <span class="dim">AI evaluation tasks</span> that the buyer can't see before paying.</h1>
       <p class="lede copy-16">
         A benchmark loses its value the moment it is seen, so here the goods stay hidden. A <b>buyer agent</b> escrows a reward and
@@ -364,8 +388,8 @@
         <a class="btn primary" id="ctaContract" target="_blank" rel="noopener">View contract on Etherscan <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M6 3h7v7M13 3 5 11"/></svg></a>
         <button class="btn" data-tab="mechanism">How the mechanism works</button>
       </div>
-    </div>
-    <div class="status-card" id="statusCard">
+    </div></div>
+    <div class="status-card in" id="statusCard" style="--d:120ms">
       <div class="head"><span class="title">Live state</span><span class="badge gray" id="refreshedAt">…</span></div>
       <div class="row"><span class="k">Network</span><span class="v" id="stNet">—</span></div>
       <div class="row"><span class="k">Head block</span><span class="v" id="stBlock">—</span></div>
@@ -381,7 +405,7 @@
   <section class="stats" id="stats" aria-label="Key metrics"></section>
 
   <div class="chart-grid">
-    <section class="card">
+    <section class="card in" style="--d:360ms">
       <div class="card-h">
         <h2 class="h16">Activity</h2>
         <span class="sub">contract events by lifecycle stage</span>
@@ -395,20 +419,20 @@
         <div class="chart" id="chart"></div>
       </div>
     </section>
-    <section class="card">
+    <section class="card in" style="--d:440ms">
       <div class="card-h"><h2 class="h16">Lifecycle</h2><span class="sub">how far bounties get</span></div>
       <div class="card-b"><div class="funnel" id="funnel"></div></div>
     </section>
   </div>
 
-  <div class="tabs" role="tablist" id="tabs">
+  <div class="tabs in" role="tablist" id="tabs" style="--d:520ms">
     <button role="tab" data-tab="bounties" aria-selected="true">Bounties <span class="cnt" id="cntBounties">0</span></button>
     <button role="tab" data-tab="reputation">Reputation</button>
     <button role="tab" data-tab="log">Agent log <span class="cnt" id="cntLog">0</span></button>
     <button role="tab" data-tab="mechanism">How it works</button>
   </div>
 
-  <section class="card" data-panel="bounties" role="tabpanel">
+  <section class="card in" data-panel="bounties" role="tabpanel" style="--d:580ms">
     <div class="card-h">
       <div class="toolbar">
         <div class="seg" id="statusSeg" role="group" aria-label="Status filter">
