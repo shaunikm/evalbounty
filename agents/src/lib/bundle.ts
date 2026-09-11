@@ -31,10 +31,31 @@ export const TaskSchema = z.object({
 });
 export type Task = z.infer<typeof TaskSchema>;
 
+/**
+ * Grading semantics version. Bump this whenever the MEANING of a score changes: the answer
+ * normaliser, the number parser, the grader type set, or any grade() branch. The graders are a
+ * consensus artifact — seller, buyer and arbiter each run them independently and money moves on
+ * whether their numbers agree — so a silent change to grading is a silent change to who wins a
+ * dispute. Pinning the version inside runParams makes a mismatch loud instead of invisible.
+ */
+export const GRADER_VERSION = "1";
+
+/**
+ * The pinned evaluation protocol: everything other than the tasks that must be identical across
+ * the three parties for a score to be reproducible. The buyer commits keccak256 of this to the
+ * chain as `spec.runParamsHash` at bounty creation, before it has seen anything.
+ */
 export const RunParamsSchema = z.object({
   temperature: z.number(),
   max_tokens: z.number().int().positive(),
   system: z.string(),
+  /**
+   * Optional only for backward compatibility with bundles committed before this field existed —
+   * absent means "pre-versioning", and canonicalization omits the key so their hashes are
+   * unchanged. It is still fully enforced for anything new: the buyer's on-chain runParamsHash
+   * includes it, and buyer and arbiter both reject a bundle whose runParams do not hash to it.
+   */
+  graderVersion: z.string().optional(),
 });
 export type RunParams = z.infer<typeof RunParamsSchema>;
 
@@ -52,6 +73,7 @@ export const DEFAULT_RUN_PARAMS: RunParams = {
   temperature: 0,
   max_tokens: 64,
   system: "You are being evaluated. Reply with only the final answer and nothing else.",
+  graderVersion: GRADER_VERSION,
 };
 
 const enc = new TextEncoder();

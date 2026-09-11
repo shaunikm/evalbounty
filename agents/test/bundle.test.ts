@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { bundleBytes, bundleCommitment, canonicalBytes, grade, objectiveTaskChecks, parseBundle, type Bundle, type Task, DEFAULT_RUN_PARAMS, runParamsHash } from "../src/lib/bundle.js";
+import { bundleBytes, bundleCommitment, canonicalBytes, grade, objectiveTaskChecks, parseBundle, type Bundle, type RunParams, type Task, DEFAULT_RUN_PARAMS, GRADER_VERSION, runParamsHash } from "../src/lib/bundle.js";
 
 const task = (over: Partial<Task> = {}): Task => ({
   index: 0,
@@ -71,5 +71,36 @@ describe("objective task checks", () => {
     expect(objectiveTaskChecks(task({ reference: "5" }), 0, "x")).toContain("reference answer fails its own grader");
     expect(objectiveTaskChecks(task({ prompt: "I am thinking of an integer between 1 and 100. What integer am I thinking of?" }), 0, "x").some((p) => /not answerable/.test(p))).toBe(true);
     expect(objectiveTaskChecks(task({ grader: { type: "regex", value: ".*" }, reference: "x" }), 0, "x").some((p) => /accepts anything/.test(p))).toBe(true);
+  });
+});
+
+describe("grader version pinning", () => {
+  it("is part of the pinned run params the buyer commits on-chain", () => {
+    expect(DEFAULT_RUN_PARAMS.graderVersion).toBe(GRADER_VERSION);
+    expect(Buffer.from(canonicalBytes(DEFAULT_RUN_PARAMS)).toString()).toContain('"graderVersion"');
+  });
+
+  it("changing grading semantics changes the hash, so buyer and arbiter cannot silently diverge", () => {
+    const bumped: RunParams = { ...DEFAULT_RUN_PARAMS, graderVersion: "2" };
+    expect(runParamsHash(bumped)).not.toBe(runParamsHash(DEFAULT_RUN_PARAMS));
+  });
+
+  it("bundles committed before the field existed still parse and keep their original hash", () => {
+    // Back-compat: an in-flight bounty delivered under the old format must still resolve, so the
+    // field is optional and canonicalization omits it rather than defaulting it in.
+    const { graderVersion: _omit, ...legacy } = DEFAULT_RUN_PARAMS;
+    const bundle = {
+      version: 1 as const,
+      salt: "0x" + "cd".repeat(32),
+      domainTag: "exact-answer-reasoning",
+      runParams: legacy,
+      tasks: [task()],
+      sellerMeasured: { weak: 3000, strong: 7000, null: 0 },
+    };
+    const bytes = bundleBytes(bundle as Bundle);
+    const parsed = parseBundle(bytes);
+    expect(parsed.runParams.graderVersion).toBeUndefined();
+    expect(runParamsHash(parsed.runParams)).toBe(runParamsHash(legacy));
+    expect(runParamsHash(parsed.runParams)).not.toBe(runParamsHash(DEFAULT_RUN_PARAMS));
   });
 });
