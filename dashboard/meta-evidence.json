@@ -13,5 +13,5 @@
   "category": "Data / evaluation goods",
   "question": "Does the delivered bundle match its commitment, and do the buyer-specified difficulty claims reproduce within tolerance?",
   "fileURI": "https://github.com/shaunikm/technical-interview/blob/main/README.md",
-  "evidenceDisplayInterfaceURI": "https://shaunikm.github.io/technical-interview/"
+  "evidenceDisplayInterfaceURI": "https://evalbounty.vercel.app/"
 }

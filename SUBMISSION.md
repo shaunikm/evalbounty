@@ -8,18 +8,8 @@ Deadline: **Thursday 2026-09-11, 2:00 PM** via the B@B Google Form (link in the 
 - [x] Source verified on Etherscan, Blockscout and Sourcify (`./scripts/verify-sepolia.sh`)
 - [x] Keys entered with `./scripts/set-keys.sh`; demo runs on OpenAI `gpt-4.1-nano-2025-04-14` vs `gpt-5-nano-2025-08-07`
 - [x] `pnpm --filter agents demo` on Sepolia, all four stories passed with real models (bounties #1 happy → Settled, #2 junk rejected then refilled → Settled, #3 easy → ClaimsFailed → Refunded, #4 garbage → BadDelivery → Refunded). Bounty #0 is a bonus story: a buyer disputed with a key that did not bind to the bounty, and the arbiter ruled for the seller, so the dashboard shows "Disputed → seller wins → Settled" there. Bounties #9 and #10 were completed by the loop-mode agents with derived keys; on #10 the buyer rejected the junk seller **on record alone** ("2 of 2 previous samples were rejected") before the honest seller refilled it, which is the reputation moment for the video. Re-run `pnpm --filter agents demo --story=happy` live while recording if you want fresh transactions on camera (about 4 minutes). Wallets hold enough for exactly one such run; for more, top up the buyer and seller from another faucet first.
-- [ ] **Vercel** (your login is required, one time):
-  ```bash
-  npx vercel login
-  ```
-  ```bash
-  npx vercel --prod
-  ```
-  When asked for a project name, pick something unique like `evalbounty-bab` (`technical-interview.vercel.app` is taken by
-  someone else). The public URL is `https://<project>.vercel.app`. If it shows a Vercel login page, open the project on
-  vercel.com → Settings → Deployment Protection and switch Vercel Authentication off. Re-run `npx vercel --prod` after any
-  dashboard change or contract redeploy (config.js is committed and served with no-cache).
-- [ ] Paste the Vercel URL into README.md (`<DASHBOARD_URL>`) and the form
+- [x] **Vercel**: deployed to production at https://evalbounty.vercel.app (project `evalbounty`, no build step, `vercel.json`). Redeploy after dashboard changes or a contract redeploy with `npx vercel --prod` from the repo root.
+- [x] Vercel URL written into README.md
 - [ ] `git push`, make the repo public (GitHub → Settings → General → Danger Zone → Change visibility) — tell Claude to do it, or do it yourself
 - [ ] Record the video (≤ 5 min), upload (YouTube unlisted / Drive), paste URL into README.md (`<VIDEO_URL>`)
 - [ ] Submit: repo URL, dashboard URL, contract address + Etherscan link, video URL

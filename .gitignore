@@ -11,3 +11,4 @@ dashboard/node_modules/
 dashboard/config.local.js
 .vercel
 .claude/worktrees/
+.env.local
