@@ -113,6 +113,7 @@
   @media (prefers-reduced-motion: reduce) {
     .in, .tile.in .spark svg, .tile.in .spark .dot, .chart.animate .stack, .chart.animate .axis, .chart.animate .grid, .chart.animate .base, .skel::after { animation: none !important; opacity: 1; stroke-dasharray: none; transform: none; }
     .funnel .bar i, .funnel .n { transition: none; }
+    .btn:hover, .flow li:hover { transform: none; }
   }
 
   /* ---------- top bar ---------- */
@@ -147,19 +148,23 @@
 
   /* ---------- hero (Geist grid) ---------- */
   .hero { position: relative; border-bottom: 1px solid var(--gray-a400); background: var(--bg-100); overflow: hidden; }
-  .hero::before { content: ""; position: absolute; inset: 0; background-image: linear-gradient(var(--hero-line) 1px, transparent 1px), linear-gradient(90deg, var(--hero-line) 1px, transparent 1px); background-size: 72px 72px; background-position: center top; mask-image: radial-gradient(ellipse 80% 90% at 50% 0%, #000 30%, transparent 100%); -webkit-mask-image: radial-gradient(ellipse 80% 90% at 50% 0%, #000 30%, transparent 100%); pointer-events: none; }
-  .hero .wrap { position: relative; display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(320px, .9fr); gap: 40px; padding-top: 56px; padding-bottom: 48px; align-items: center; }
+  .hero::before, .hero::after { content: ""; position: absolute; inset: 0; background-size: 72px 72px; background-position: center top; pointer-events: none; }
+  .hero::before { background-image: linear-gradient(var(--hero-line) 1px, transparent 1px), linear-gradient(90deg, var(--hero-line) 1px, transparent 1px); mask-image: radial-gradient(ellipse 70% 85% at 50% 0%, #000 20%, transparent 100%); -webkit-mask-image: radial-gradient(ellipse 70% 85% at 50% 0%, #000 20%, transparent 100%); }
+  .hero::after { background-image: linear-gradient(var(--gray-500) 1px, transparent 1px), linear-gradient(90deg, var(--gray-500) 1px, transparent 1px); mask-image: radial-gradient(220px circle at var(--hx, -999px) var(--hy, -999px), #000 0%, transparent 70%); -webkit-mask-image: radial-gradient(220px circle at var(--hx, -999px) var(--hy, -999px), #000 0%, transparent 70%); opacity: 0; transition: opacity .35s; }
+  .hero:hover::after { opacity: .8; }
+  .hero .wrap { position: relative; padding-top: 44px; padding-bottom: 32px; }
+  .hero-top { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(320px, .8fr); gap: 40px; align-items: center; }
   .hero .cross { position: absolute; width: 17px; height: 17px; pointer-events: none; }
   .hero .cross::before, .hero .cross::after { content: ""; position: absolute; background: var(--gray-500); }
   .hero .cross::before { left: 8px; top: 0; width: 1px; height: 17px; } .hero .cross::after { top: 8px; left: 0; height: 1px; width: 17px; }
-  .eyebrow { display: inline-flex; align-items: center; gap: 8px; margin-bottom: 18px; }
-  .hero h1 { max-width: 640px; }
+  .eyebrow { display: inline-flex; align-items: center; gap: 8px; margin-bottom: 16px; }
+  .hero h1 { max-width: 620px; }
   .hero h1 .dim { color: var(--gray-700); font-weight: 500; }
-  .lede { margin: 18px 0 24px; max-width: 600px; color: var(--gray-900); }
+  .lede { margin: 14px 0 22px; max-width: 560px; color: var(--gray-900); }
   .lede b { color: var(--gray-1000); font-weight: 500; }
   .cta { display: flex; flex-wrap: wrap; gap: 10px; }
-  .btn { display: inline-flex; align-items: center; gap: 7px; height: 40px; padding: 0 16px; border-radius: 6px; font-weight: 500; font-size: 14px; border: 1px solid var(--gray-a500); background: var(--bg-100); color: var(--gray-1000); transition: background .12s, border-color .12s; }
-  .btn:hover { background: var(--gray-100); border-color: var(--gray-600); }
+  .btn { display: inline-flex; align-items: center; gap: 7px; height: 40px; padding: 0 16px; border-radius: 6px; font-weight: 500; font-size: 14px; border: 1px solid var(--gray-a500); background: var(--bg-100); color: var(--gray-1000); transition: background .12s, border-color .12s, transform .12s, box-shadow .12s; }
+  .btn:hover { background: var(--gray-100); border-color: var(--gray-600); transform: translateY(-1px); box-shadow: 0 4px 12px rgba(0,0,0,.12); }
   .btn.primary { background: var(--gray-1000); color: var(--bg-100); border-color: var(--gray-1000); }
   .btn.primary:hover { background: var(--gray-900); border-color: var(--gray-900); }
   .btn svg { width: 14px; height: 14px; }
@@ -170,7 +175,29 @@
   .status-card .row .v { font-family: var(--mono); font-size: 12.5px; text-align: right; }
   .status-card .head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
   .status-card .head .title { font-weight: 500; }
+  /* six-step flow strip, counts come from the chain */
+  .flow { list-style: none; margin: 32px 0 0; padding: 0; display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 10px; }
+  .flow li { position: relative; padding: 12px 14px 12px; border-radius: 10px; border: 1px solid var(--gray-a400); background: color-mix(in srgb, var(--bg-100) 72%, transparent); transition: border-color .15s, transform .15s, background .15s, box-shadow .15s; cursor: default; }
+  .flow li:hover { border-color: var(--gray-600); transform: translateY(-2px); background: var(--bg-100); box-shadow: 0 8px 24px rgba(0,0,0,.14); }
+  .flow li:not(:last-child)::after { content: ""; position: absolute; right: -10px; top: 50%; width: 10px; height: 1px; background: var(--gray-500); }
+  .flow .n { display: flex; align-items: center; justify-content: space-between; gap: 6px; font-family: var(--mono); font-size: 11px; color: var(--gray-800); margin-bottom: 6px; white-space: nowrap; overflow: hidden; }
+  .flow .n .fn { overflow: hidden; text-overflow: ellipsis; }
+  .flow .cnt { flex: none; min-width: 20px; text-align: center; padding: 0 6px; border-radius: 999px; background: var(--gray-100); border: 1px solid var(--gray-a400); color: var(--gray-900); font-size: 11px; line-height: 16px; transition: background .2s, color .2s, border-color .2s; }
+  .flow li.on .cnt { background: var(--gray-1000); color: var(--bg-100); border-color: var(--gray-1000); }
+  .flow b { display: block; font-weight: 600; letter-spacing: -0.01em; font-size: 14px; line-height: 20px; }
+  .flow .d { display: block; margin-top: 3px; font-size: 12px; line-height: 16px; color: var(--gray-800); transition: color .15s; }
+  .flow li:hover .d { color: var(--gray-900); }
 
+  /* ---------- mouse layer: spotlight, anchored tooltip ---------- */
+  .card, .tile, .status-card, .flow li { position: relative; isolation: isolate; }
+  .card::before, .tile::before, .status-card::before, .flow li::before { content: ""; position: absolute; inset: 0; border-radius: inherit; z-index: -1; pointer-events: none; opacity: 0; transition: opacity .35s; background: radial-gradient(380px circle at var(--mx, 50%) var(--my, 50%), var(--gray-a200), transparent 45%); }
+  .card:hover::before, .tile:hover::before, .status-card:hover::before, .flow li:hover::before { opacity: 1; }
+  .card { transition: box-shadow .2s; } .card:hover { box-shadow: var(--shadow-md); }
+  #gtip { position: fixed; z-index: 60; pointer-events: none; background: var(--gray-1000); color: var(--bg-100); border-radius: 6px; padding: 6px 9px; font-size: 12px; line-height: 16px; max-width: 360px; box-shadow: 0 6px 20px rgba(0,0,0,.25); opacity: 0; transform: translate(-50%, calc(-100% - 8px)) scale(.97); transition: opacity .12s, transform .12s; white-space: pre-line; overflow-wrap: anywhere; }
+  #gtip.on { opacity: 1; transform: translate(-50%, calc(-100% - 10px)); }
+  #gtip.below { transform: translate(-50%, 8px) scale(.97); } #gtip.below.on { transform: translate(-50%, 10px); }
+  #gtip.mono { font-family: var(--mono); font-size: 11.5px; }
+  [data-tip] { cursor: help; } a[data-tip], button[data-tip], .row [data-tip] { cursor: pointer; }
   /* ---------- sections ---------- */
   main { padding: 28px 0 64px; display: grid; gap: 24px; grid-template-columns: minmax(0, 1fr); }
   main > *, .chart-grid > *, .stats > *, .detail-grid > *, .card, .chart { min-width: 0; }
@@ -194,6 +221,12 @@
   .tile .spark svg { position: absolute; inset: 0; width: 100%; height: 100%; display: block; overflow: visible; }
   .tile .spark .dot { position: absolute; width: 7px; height: 7px; border-radius: 50%; transform: translate(-50%, -50%); box-shadow: 0 0 0 2px var(--bg-100); }
   .tile .foot { color: var(--gray-800); font-size: 12px; line-height: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .tile .v .hv { display: none; font-family: var(--mono); font-size: 12.5px; letter-spacing: 0; font-weight: 500; color: var(--gray-900); }
+  .tile.scrub .v .hv { display: inline; } .tile.scrub .v .delta { display: none; }
+  .tile .spark .guide { position: absolute; top: -4px; bottom: -4px; width: 1px; background: var(--gray-600); opacity: 0; pointer-events: none; transition: opacity .12s; }
+  .tile .spark .pt { position: absolute; width: 9px; height: 9px; border-radius: 50%; transform: translate(-50%, -50%); box-shadow: 0 0 0 2px var(--bg-100), 0 0 0 5px color-mix(in srgb, currentColor 25%, transparent); opacity: 0; pointer-events: none; transition: opacity .12s; }
+  .tile.scrub .spark .guide, .tile.scrub .spark .pt { opacity: 1; } .tile.scrub .spark .dot { opacity: 0; }
+  .tile .spark { cursor: crosshair; }
 
   /* segmented control */
   .seg { display: inline-flex; padding: 2px; border-radius: 8px; background: var(--gray-100); border: 1px solid var(--gray-a200); }
@@ -208,10 +241,17 @@
   .chart .bar { transition: opacity .1s; }
   .chart .hit { fill: transparent; transition: fill .1s; }
   .chart .hit:hover { fill: var(--gray-a200); }
+  .chart .stack { transition: opacity .12s; }
+  .chart[data-active] .stack { opacity: .4; } .chart[data-active] .stack.active { opacity: 1; }
+  .chart .cursor { stroke: var(--gray-600); stroke-dasharray: 3 3; pointer-events: none; }
+  .legend button { display: inline-flex; align-items: center; gap: 6px; padding: 2px 6px; margin: -2px -6px; border-radius: 6px; color: var(--gray-900); transition: background .12s, opacity .12s; }
+  .legend button:hover { background: var(--gray-a200); color: var(--gray-1000); }
+  .legend button[aria-pressed="false"] { opacity: .45; } .legend button[aria-pressed="false"] i { background: var(--gray-500) !important; }
   .chart .axis text { fill: var(--gray-800); font-family: var(--mono); font-size: 11px; }
   .chart .grid line { stroke: var(--gray-a400); stroke-dasharray: 2 4; }
   .chart .base { stroke: var(--gray-500); }
-  .tooltip { position: absolute; pointer-events: none; z-index: 5; background: var(--gray-1000); color: var(--bg-100); border-radius: 8px; padding: 8px 10px; font-size: 12px; line-height: 16px; min-width: 150px; box-shadow: 0 8px 24px rgba(0,0,0,.25); transform: translate(-50%, -100%); white-space: nowrap; }
+  .tooltip { position: absolute; pointer-events: none; z-index: 5; background: var(--gray-1000); color: var(--bg-100); border-radius: 8px; padding: 8px 10px; font-size: 12px; line-height: 16px; min-width: 150px; box-shadow: 0 8px 24px rgba(0,0,0,.25); white-space: nowrap; }
+  .tooltip.flip { transform: translateX(-100%); }
   .tooltip .t { font-family: var(--mono); opacity: .7; margin-bottom: 4px; }
   .tooltip .r { display: flex; justify-content: space-between; gap: 14px; } .tooltip .r i { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 6px; vertical-align: -0.5px; }
   .legend { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12px; color: var(--gray-900); }
@@ -221,7 +261,8 @@
 
   /* funnel */
   .funnel { display: grid; gap: 12px; }
-  .funnel .step { display: grid; grid-template-columns: 22px 1fr 28px; align-items: center; gap: 12px; font-size: 13px; }
+  .funnel .step { display: grid; grid-template-columns: 22px 1fr 28px; align-items: center; gap: 12px; font-size: 13px; padding: 4px 8px; margin: 0 -8px; border-radius: 8px; transition: background .12s; }
+  .funnel .step:hover { background: var(--gray-a200); } .funnel .step:hover .bar i { filter: brightness(1.15); }
   .funnel .cnt { text-align: right; }
   .funnel .n { width: 22px; height: 22px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-family: var(--mono); font-size: 11px; background: var(--gray-100); color: var(--gray-900); border: 1px solid var(--gray-a400); }
   .funnel .n.on { background: var(--gray-1000); color: var(--bg-100); border-color: var(--gray-1000); }
@@ -236,7 +277,9 @@
   .tabs button { position: relative; height: 44px; padding: 0 12px; color: var(--gray-900); font-weight: 500; font-size: 14px; display: inline-flex; align-items: center; gap: 8px; }
   .tabs button:hover { color: var(--gray-1000); }
   .tabs button[aria-selected="true"] { color: var(--gray-1000); }
-  .tabs button[aria-selected="true"]::after { content: ""; position: absolute; left: 8px; right: 8px; bottom: -1px; height: 2px; background: var(--gray-1000); border-radius: 1px; }
+  .tabs button::after { content: ""; position: absolute; left: 8px; right: 8px; bottom: -1px; height: 2px; background: transparent; border-radius: 1px; transition: background .15s; }
+  .tabs button:hover::after { background: var(--gray-500); }
+  .tabs button[aria-selected="true"]::after { background: var(--gray-1000); }
   .tabs .cnt { font-family: var(--mono); font-size: 11px; padding: 1px 6px; border-radius: 999px; background: var(--gray-100); color: var(--gray-900); border: 1px solid var(--gray-a400); }
 
   /* toolbar */
@@ -256,6 +299,9 @@
   .tbl .num { font-family: var(--mono); font-variant-numeric: tabular-nums; font-size: 12.5px; white-space: nowrap; }
   .tbl .nowrap { white-space: nowrap; }
   .tbl tr.row { cursor: pointer; transition: background .1s; } .tbl tr.row:hover td { background: var(--gray-a200); }
+  .tbl tr.row td:first-child { box-shadow: inset 3px 0 0 transparent; transition: box-shadow .15s; }
+  .tbl tr.row:hover td:first-child, .tbl tr.row[aria-expanded="true"] td:first-child { box-shadow: inset 3px 0 0 var(--blue-700); }
+  .tbl tr.row .chev { transition: transform .15s, color .15s; } .tbl tr.row:hover .chev { color: var(--gray-1000); transform: translateX(2px); } .tbl tr.row[aria-expanded="true"]:hover .chev { transform: rotate(90deg); }
   .tbl tr.row[aria-expanded="true"] td { background: var(--gray-a200); border-bottom-color: transparent; }
   .tbl .chev { width: 14px; height: 14px; color: var(--gray-700); transition: transform .15s; }
   .tbl tr.row[aria-expanded="true"] .chev { transform: rotate(90deg); }
@@ -264,7 +310,8 @@
   .scroll-x { overflow-x: auto; }
 
   .addr { display: inline-flex; align-items: center; gap: 7px; font-family: var(--mono); font-size: 12.5px; white-space: nowrap; }
-  .addr .id { width: 16px; height: 16px; border-radius: 50%; flex: none; box-shadow: inset 0 0 0 1px rgba(0,0,0,.15); }
+  .addr .id { width: 16px; height: 16px; border-radius: 50%; flex: none; box-shadow: inset 0 0 0 1px rgba(0,0,0,.15); transition: transform .15s; }
+  .addr:hover .id { transform: scale(1.2); }
   .addr .who { font-family: var(--sans); font-size: 11px; color: var(--gray-900); background: var(--gray-100); border: 1px solid var(--gray-a400); padding: 0 6px; border-radius: 999px; line-height: 16px; }
   a.addr:hover { text-decoration: underline; text-underline-offset: 3px; }
   .tx { display: inline-flex; align-items: center; gap: 3px; color: var(--gray-800); font-family: var(--mono); font-size: 12px; }
@@ -311,6 +358,9 @@
   .log { max-height: 520px; overflow: auto; font-family: var(--mono); font-size: 12.5px; line-height: 18px; border-top: 1px solid var(--gray-a400); }
   .log .ln { display: grid; grid-template-columns: 64px 128px minmax(0, 1fr) auto; gap: 12px; padding: 7px 20px; border-bottom: 1px solid var(--gray-a200); align-items: start; }
   .log .ln:hover { background: var(--gray-a200); }
+  @keyframes flashrow { 0% { background: var(--blue-100); } 100% { background: transparent; } }
+  .log .ln.new { animation: flashrow 3s ease-out; }
+  .live .plus { color: var(--green-900); font-weight: 600; margin-left: 2px; opacity: 0; transition: opacity .3s; } .live.flash .plus { opacity: 1; } .live.flash .dot { animation: pulse .45s ease-in-out 4; }
   .log .ln .t { color: var(--gray-800); } .log .ln .m { font-family: var(--sans); font-size: 13px; color: var(--gray-1000); word-break: break-word; }
   .log .ev { display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--gray-900); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .log .ev i { width: 7px; height: 7px; border-radius: 2px; flex: none; }
@@ -324,14 +374,15 @@
   footer .spacer { flex: 1; }
 
   @media (max-width: 1000px) {
-    .hero .wrap { grid-template-columns: 1fr; padding-top: 40px; }
+    .hero-top { grid-template-columns: 1fr; }
+    .flow { grid-template-columns: repeat(3, minmax(0, 1fr)); } .flow li:not(:last-child)::after { display: none; }
     .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .chart-grid, .detail-grid { grid-template-columns: 1fr; }
     .h48 { font-size: 36px; line-height: 42px; }
   }
   @media (max-width: 640px) {
     .wrap { padding: 0 16px; }
-    .stats { grid-template-columns: 1fr; }
+    .stats, .flow { grid-template-columns: 1fr; }
     .nav .hide-sm { display: none; }
     .log .ln { grid-template-columns: 1fr; gap: 2px; }
     .tabs { overflow-x: auto; }
@@ -361,35 +412,41 @@
   </div>
 </nav>
 
-<header class="hero">
+<header class="hero" id="hero">
   <div class="wrap">
     <span class="cross" style="left:15px;top:-9px"></span><span class="cross" style="right:15px;top:-9px"></span>
     <span class="cross" style="left:15px;bottom:-9px"></span><span class="cross" style="right:15px;bottom:-9px"></span>
-    <div>
-      <div class="in" style="--d:0ms"><div class="eyebrow"><span class="badge blue">Black Box Bazaar</span><span class="badge">B@B Fa'26 take-home</span></div>
-      <h1 class="h48">A sealed market for <span class="dim">AI evaluation tasks</span> that the buyer can't see before paying.</h1>
-      <p class="lede copy-16">
-        A benchmark loses its value the moment it is seen, so here the goods stay hidden. A <b>buyer agent</b> escrows a reward and
-        defines value in machine-checkable terms; a <b>seller agent</b> commits to a hidden bundle with a bond; the <b>next block's hash</b>
-        picks a sample the seller must reveal with Merkle proofs; the rest is delivered <b>encrypted</b>; the buyer <b>reruns the difficulty claims</b>
-        and pays, or disputes to a bonded <b>arbiter</b>. This page is a read-only window on the contract. Every row below is a real transaction.
-      </p>
-      <div class="cta">
-        <a class="btn primary" id="ctaContract" target="_blank" rel="noopener">View contract on Etherscan <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M6 3h7v7M13 3 5 11"/></svg></a>
-        <a class="btn" href="https://github.com/shaunikm/technical-interview#readme" target="_blank" rel="noopener">How the mechanism works <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M6 3h7v7M13 3 5 11"/></svg></a>
+    <div class="hero-top">
+      <div>
+        <div class="eyebrow in" style="--d:0ms"><span class="badge blue">Black Box Bazaar</span><span class="badge">Ethereum Sepolia</span><span class="badge gray" data-tip="This page holds no keys and sends no transactions. The buyer, seller and arbiter are autonomous agents that read the same events and talk to the contract directly. To take part you run an agent, not a button.">read-only window</span></div>
+        <h1 class="h48 in" style="--d:60ms">A sealed market for AI evals. <span class="dim">Buyers pay before they look.</span></h1>
+        <p class="lede in" style="--d:120ms">A benchmark loses its value once it is seen, so here autonomous agents trade evaluation tasks the buyer cannot inspect: the <b>chain samples</b>, delivery is <b>encrypted</b>, the buyer <b>reruns the claims</b>, and a bonded <b>arbiter</b> settles disputes.</p>
+        <div class="cta in" style="--d:180ms">
+          <a class="btn primary" id="ctaContract" target="_blank" rel="noopener">View contract on Etherscan <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M6 3h7v7M13 3 5 11"/></svg></a>
+          <a class="btn" href="https://github.com/shaunikm/technical-interview#readme" target="_blank" rel="noopener">README <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M6 3h7v7M13 3 5 11"/></svg></a>
+        </div>
       </div>
-    </div></div>
-    <div class="status-card in" id="statusCard" style="--d:120ms">
-      <div class="head"><span class="title">Live state</span><span class="badge gray" id="refreshedAt">…</span></div>
-      <div class="row"><span class="k">Network</span><span class="v" id="stNet">—</span></div>
-      <div class="row"><span class="k">Head block</span><span class="v" id="stBlock">—</span></div>
-      <div class="row"><span class="k">Market contract</span><span class="v" id="stContract">—</span></div>
-      <div class="row"><span class="k">Arbitrator</span><span class="v" id="stArb">—</span></div>
-      <div class="row"><span class="k">Events indexed</span><span class="v" id="stEvents">—</span></div>
-      <div class="row"><span class="k">Escrowed now</span><span class="v" id="stEscrow">—</span></div>
+      <div class="status-card in" id="statusCard" style="--d:120ms">
+        <div class="head"><span class="title">Live state</span><span class="badge gray" id="refreshedAt">…</span></div>
+        <div class="row"><span class="k">Network</span><span class="v" id="stNet">—</span></div>
+        <div class="row"><span class="k">Head block</span><span class="v" id="stBlock">—</span></div>
+        <div class="row"><span class="k">Market contract</span><span class="v" id="stContract">—</span></div>
+        <div class="row"><span class="k">Arbitrator</span><span class="v" id="stArb">—</span></div>
+        <div class="row"><span class="k">Events indexed</span><span class="v" id="stEvents">—</span></div>
+        <div class="row"><span class="k">Escrowed now</span><span class="v" id="stEscrow">—</span></div>
+      </div>
     </div>
+    <ol class="flow in" id="flow" style="--d:260ms">
+      <li data-stage="created"><span class="n"><span class="fn">01 · createBounty</span><span class="cnt">–</span></span><b>Bounty</b><span class="d">Buyer escrows the reward and pins models, band and tolerance.</span></li>
+      <li data-stage="committed"><span class="n"><span class="fn">02 · commit</span><span class="cnt">–</span></span><b>Commit</b><span class="d">Seller posts Merkle root, bundle hash and a bond ≥ 50 % of the reward.</span></li>
+      <li data-stage="sampled"><span class="n"><span class="fn">03 · revealSample</span><span class="cnt">–</span></span><b>Sample</b><span class="d">Next block's hash picks k of N; the seller reveals exactly those with proofs.</span></li>
+      <li data-stage="approved"><span class="n"><span class="fn">04 · approveSample</span><span class="cnt">–</span></span><b>Judge</b><span class="d">Buyer approves the sample or walks away. Rejection never slashes.</span></li>
+      <li data-stage="delivered"><span class="n"><span class="fn">05 · deliver</span><span class="cnt">–</span></span><b>Deliver</b><span class="d">Bundle encrypted to the buyer's X25519 key, posted in the event log.</span></li>
+      <li data-stage="accepted"><span class="n"><span class="fn">06 · accept / dispute</span><span class="cnt">–</span></span><b>Verify</b><span class="d">Buyer decrypts, checks hash and root, reruns the claims; accepts or disputes.</span></li>
+    </ol>
   </div>
 </header>
+<div id="gtip" role="tooltip"></div>
 
 <main class="wrap">
   <section class="stats" id="stats" aria-label="Key metrics"></section>
@@ -401,7 +458,7 @@
         <span class="sub">contract events by lifecycle stage</span>
         <span class="spacer"></span>
         <div class="seg" id="rangeSeg" role="group" aria-label="Time range">
-          <button data-range="24h">24h</button><button data-range="7d">7d</button><button data-range="30d">30d</button><button data-range="all" aria-pressed="true">All time</button>
+          <button data-range="1h">1h</button><button data-range="6h">6h</button><button data-range="24h">24h</button><button data-range="7d">7d</button><button data-range="all" aria-pressed="true">All</button>
         </div>
       </div>
       <div class="card-b">

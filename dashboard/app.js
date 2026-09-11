@@ -49,13 +49,13 @@ function addr(a, { label = true } = {}) {
   if (!a || a === ZERO) return `<span class="faint">—</span>`;
   const inner = `${identicon(a)}${short(a)}${label && who(a) ? `<span class="who">${who(a)}</span>` : ""}`;
   return hasExplorer
-    ? `<a class="addr" href="${cfg.explorerBase}/address/${a}" target="_blank" rel="noopener" title="${a}">${inner}</a>`
-    : `<span class="addr" title="${a}">${inner}</span>`;
+    ? `<a class="addr" href="${cfg.explorerBase}/address/${a}" target="_blank" rel="noopener" data-tip="${a}" data-tip-mono>${inner}</a>`
+    : `<span class="addr" data-tip="${a}" data-tip-mono>${inner}</span>`;
 }
 function tx(h, text = "tx") {
   return hasExplorer
-    ? `<a class="tx" href="${cfg.explorerBase}/tx/${h}" target="_blank" rel="noopener" title="${h}">${text}${EXT}</a>`
-    : `<span class="tx" title="${h}">${text}</span>`;
+    ? `<a class="tx" href="${cfg.explorerBase}/tx/${h}" target="_blank" rel="noopener" data-tip="tx ${h}" data-tip-mono>${text}${EXT}</a>`
+    : `<span class="tx" data-tip="tx ${h}" data-tip-mono>${text}</span>`;
 }
 const timeOf = (sec) => new Date(Number(sec) * 1000);
 const fmtTime = (sec) => timeOf(sec).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
@@ -141,7 +141,8 @@ let firstData = true; // entrance animations play once, on the first render with
 
 // ---------- state ----------
 const S = { events: [], bounties: [], byId: {}, head: 0n, sellers: [], buyers: [], srep: [], brep: [], refreshedAt: null, error: null };
-const UI = { tab: "bounties", range: "all", status: "all", q: "", expanded: new Set(), logCats: new Set(CATS.map((c) => c.key)) };
+const UI = { tab: "bounties", range: "all", rangeManual: false, status: "all", q: "", expanded: new Set(), logCats: new Set(CATS.map((c) => c.key)), hiddenCats: new Set() };
+let newFrom = Infinity; // index of the first event that arrived on the latest refresh
 
 async function refresh() {
   try {
@@ -159,7 +160,10 @@ async function refresh() {
       readMany(sellers.map((a) => ({ address: cfg.contractAddress, abi, functionName: "sellerRep", args: [a] }))),
       readMany(buyers.map((a) => ({ address: cfg.contractAddress, abi, functionName: "buyerRep", args: [a] }))),
     ]);
+    const prevLen = S.refreshedAt ? S.events.length : events.length;
+    newFrom = events.length > prevLen ? prevLen : Infinity;
     Object.assign(S, { head, events, bounties, byId, sellers, buyers, srep: srep.map((r) => r.result ?? []), brep: brep.map((r) => r.result ?? []), refreshedAt: new Date(), error: null });
+    if (!UI.rangeManual) setRange(autoRange(), false);
     window.__state = { events, bounties };
   } catch (err) {
     console.error(err);
@@ -173,31 +177,40 @@ function bucketize(range) {
   const now = Math.floor(Date.now() / 1000);
   const first = S.events.length ? Math.min(...S.events.map(tsOf).filter(Boolean)) : now - 3600;
   let start, step;
-  if (range === "24h") { step = 3600; start = now - 24 * step; }
+  if (range === "1h") { step = 300; start = now - 12 * step; }
+  else if (range === "6h") { step = 900; start = now - 24 * step; }
+  else if (range === "24h") { step = 3600; start = now - 24 * step; }
   else if (range === "7d") { step = 6 * 3600; start = now - 28 * step; }
-  else if (range === "30d") { step = 86400; start = now - 30 * step; }
-  else { const span = now - first; step = span <= 48 * 3600 ? 3600 : span <= 14 * 86400 ? 6 * 3600 : 86400; start = Math.min(first, now - 12 * step); }
+  else { const span = now - first; step = span <= 3 * 3600 ? 300 : span <= 12 * 3600 ? 900 : span <= 48 * 3600 ? 3600 : span <= 14 * 86400 ? 6 * 3600 : 86400; start = Math.min(first, now - 12 * step); }
   start = Math.floor(start / step) * step;
   const n = Math.ceil((now - start) / step) + 1;
   const buckets = Array.from({ length: n }, (_, i) => ({ t: start + i * step, step, counts: Object.fromEntries(CATS.map((c) => [c.key, 0])), total: 0 }));
   for (const e of S.events) { const t = tsOf(e); if (t === undefined || t < start) continue; const b = buckets[Math.min(n - 1, Math.floor((t - start) / step))]; b.counts[catOf(e.eventName)]++; b.total++; }
   return buckets;
 }
+// Pick the shortest window that has something to show: while tests run this lands on 1h.
+function autoRange() {
+  const now = Date.now() / 1000;
+  const cnt = (w) => S.events.filter((e) => tsOf(e) >= now - w).length;
+  if (cnt(3600) >= 4) return "1h";
+  if (cnt(6 * 3600) >= 4) return "6h";
+  if (cnt(86400) >= 1) return "24h";
+  if (cnt(7 * 86400) >= 1) return "7d";
+  return "all";
+}
+function setRange(r, manual) {
+  UI.range = r; if (manual) UI.rangeManual = true;
+  $$("#rangeSeg button").forEach((b) => b.setAttribute("aria-pressed", b.dataset.range === r));
+}
+const STAGE_EVENT = { created: "BountyCreated", committed: "Committed", sampled: "SampleComplete", approved: "SampleApproved", delivered: "Delivered", accepted: "Accepted", disputed: "Disputed", settled: "Settled", refunded: "Refunded", split: "Split" };
 function stageCounts() {
-  const c = { created: 0, committed: 0, sampled: 0, approved: 0, delivered: 0, accepted: 0, disputed: 0, settled: 0, refunded: 0, split: 0 };
-  for (const [id, evs] of Object.entries(S.byId)) {
+  const c = {}; const ids = {};
+  for (const k of Object.keys(STAGE_EVENT)) { c[k] = 0; ids[k] = []; }
+  for (const [id, evs] of Object.entries(S.byId).sort((x, y) => Number(x[0]) - Number(y[0]))) {
     const names = new Set(evs.map((e) => e.eventName));
-    if (names.has("BountyCreated")) c.created++;
-    if (names.has("Committed")) c.committed++;
-    if (names.has("SampleComplete")) c.sampled++;
-    if (names.has("SampleApproved")) c.approved++;
-    if (names.has("Delivered")) c.delivered++;
-    if (names.has("Accepted")) c.accepted++;
-    if (names.has("Disputed")) c.disputed++;
-    if (names.has("Settled")) c.settled++;
-    if (names.has("Refunded")) c.refunded++;
-    if (names.has("Split")) c.split++;
+    for (const [k, ev] of Object.entries(STAGE_EVENT)) if (names.has(ev)) { c[k]++; ids[k].push(`#${id}`); }
   }
+  c.ids = ids;
   return c;
 }
 
@@ -210,7 +223,8 @@ function sparkline(series, color) {
   const line = `M${pts.join("L")}`;
   const area = `${line}L${x(n - 1).toFixed(1)},${h}L${x(0).toFixed(1)},${h}Z`;
   const gid = `g${Math.random().toString(36).slice(2, 8)}`;
-  const dot = `<i class="dot" style="left:${((x(n - 1) / w) * 100).toFixed(2)}%;top:${((y(series[n - 1]) / h) * 100).toFixed(2)}%;background:${color}"></i>`;
+  const dot = `<i class="dot" style="left:${((x(n - 1) / w) * 100).toFixed(2)}%;top:${((y(series[n - 1]) / h) * 100).toFixed(2)}%;background:${color}"></i><i class="guide"></i><i class="pt" style="background:${color};color:${color}"></i>`;
+  sparkline.last = { xs: series.map((_, i) => +((x(i) / w) * 100).toFixed(2)), ys: series.map((v) => +((y(v) / h) * 100).toFixed(2)) };
   return `<svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" aria-hidden="true"><defs><linearGradient id="${gid}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${color}" stop-opacity=".28"/><stop offset="1" stop-color="${color}" stop-opacity="0"/></linearGradient></defs><path class="area" d="${area}" fill="url(#${gid})"/><path class="line" d="${line}" fill="none" stroke="${color}" stroke-width="1.5" vector-effect="non-scaling-stroke" stroke-linejoin="round"/></svg>${dot}`;
 }
 // Sparklines: 24 equal buckets from the first event to now, so the line shows the shape of the
@@ -238,7 +252,11 @@ function perBucket(pick) {
 // ---------- render ----------
 function renderAll() {
   const animate = firstData && !!S.refreshedAt;
-  renderTop(); renderStats(animate); renderChart(animate); renderFunnel(animate); renderBounties(); renderReputation(); renderLog();
+  renderTop();
+  // Do not yank a chart out from under the pointer: a hovered tile or chart keeps its state until the next refresh.
+  if (!$("#stats .tile.scrub")) renderStats(animate);
+  if (!$("#chart[data-active]")) renderChart(animate);
+  renderFunnel(animate); renderBounties(); renderReputation(); renderLog();
   if (animate) firstData = false;
 }
 
@@ -246,8 +264,8 @@ function renderTop() {
   const live = $("#live");
   if (S.error) live.innerHTML = `<span class="dot bad"></span><span>RPC error</span>`;
   else if (!S.refreshedAt) live.innerHTML = `<span class="dot wait"></span><span>connecting</span>`;
-  else live.innerHTML = `<span class="dot"></span><span>block ${fmtInt(S.head)}</span>`;
-  live.title = S.error ? S.error : `${chain.name} via ${cfg.rpcUrl}`;
+  else { const fresh = Number.isFinite(newFrom) ? S.events.length - newFrom : 0; live.innerHTML = `<span class="dot"></span><span>block ${fmtInt(S.head)}</span><span class="plus">+${fresh}</span>`; if (fresh) { live.classList.add("flash"); setTimeout(() => live.classList.remove("flash"), 4000); } }
+  live.setAttribute("data-tip", S.error ? S.error : `${chain.name} via ${cfg.rpcUrl}\nrefreshes every 10 s`);
   $("#netBadge").textContent = chain.name;
   $("#refreshedAt").textContent = S.error ? `error: ${S.error}` : S.refreshedAt ? `refreshed ${S.refreshedAt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}` : "connecting…";
   $("#stNet").textContent = `${chain.name} (${cfg.chainId})`;
@@ -267,13 +285,13 @@ function renderTop() {
 
 function renderStats(animate) {
   if (!S.refreshedAt) {
-    $("#stats").innerHTML = ["Bounties", "Reward volume", "Events (24h)", "Seller success"].map((k) => `<div class="tile"><div class="k">${k}</div><div class="v"><span class="skel">00</span></div><div class="spark skel" style="height:40px"></div><div class="foot skel">loading from the chain</div></div>`).join("");
+    $("#stats").innerHTML = ["Bounties", "Reward volume", "Contract events", "Disputes"].map((k) => `<div class="tile"><div class="k">${k}</div><div class="v"><span class="skel">00</span></div><div class="spark skel" style="height:40px"></div><div class="foot skel">loading from the chain</div></div>`).join("");
     return;
   }
   const b = S.bounties.filter(Boolean);
   const now = Date.now() / 1000, day = 86400;
   const inWin = (from, to) => S.events.filter((e) => { const t = tsOf(e); return t >= from && t < to; });
-  const last24 = inWin(now - day, now).length, prev24 = inWin(now - 2 * day, now - day).length;
+  const last24 = inWin(now - day, now).length, prev24 = inWin(now - 2 * day, now - day).length, lastHour = inWin(now - 3600, now).length;
   const created24 = inWin(now - day, now).filter((e) => e.eventName === "BountyCreated").length;
   const settledVol = S.events.filter((e) => e.eventName === "Settled").reduce((s, e) => s + e.args.sellerPayout + e.args.fee, 0n);
   const escrowVol = S.events.filter((e) => e.eventName === "BountyCreated").reduce((s, e) => s + e.args.reward, 0n);
@@ -286,10 +304,11 @@ function renderStats(animate) {
   const tiles = [
     { k: "Bounties", num: b.length, fmt: (v) => fmtInt(Math.round(v)), sub: created24 ? { cls: "up", txt: `+${created24} in 24h` } : { cls: "flat", txt: `${b.filter((x) => LIVE.has(STATUS[x.status])).length} in progress` }, spark: cumulative((e) => e.eventName === "BountyCreated" ? 1 : 0), color: "var(--s-bounty)", foot: `${b.filter((x) => STATUS[x.status] === "Open").length} open · ${b.filter((x) => LIVE.has(STATUS[x.status])).length} in progress · ${term} closed` },
     { k: "Reward volume", num: ethNum(escrowVol), fmt: (v) => v.toFixed(3), unit: "ETH", sub: { cls: "flat", txt: `${ethNum(settledVol).toFixed(3)} paid out` }, spark: cumulative((e) => e.eventName === "BountyCreated" ? ethNum(e.args.reward) : 0), color: "var(--s-settle)", foot: "escrowed by buyers since deploy" },
-    { k: "Events (24h)", num: last24, fmt: (v) => fmtInt(Math.round(v)), sub: { cls: d.cls, txt: prev24 ? `${d.txt} vs prior 24h` : `${d.txt} in 24h` }, spark: perBucket(() => 1), color: "var(--s-commit)", foot: `${fmtInt(S.events.length)} total contract events` },
-    { k: "Seller success", num: term ? (settled / term) * 100 : null, fmt: (v) => (v === null ? "—" : `${v.toFixed(0)}%`), sub: { cls: "flat", txt: `${disputes} dispute${disputes === 1 ? "" : "s"}` }, spark: cumulative((e) => e.eventName === "Settled" ? 1 : 0), color: "var(--s-delivery)", foot: rulings.length ? `rulings: ${rulings.filter((r) => r === 1).length} seller · ${rulings.filter((r) => r === 2).length} buyer · ${rulings.filter((r) => r === 0).length} refused` : "settled ÷ closed bounties" },
+    { k: "Contract events", num: S.events.length, fmt: (v) => fmtInt(Math.round(v)), sub: lastHour ? { cls: "up", txt: `+${lastHour} in the last hour` } : last24 ? { cls: "up", txt: `+${last24} in 24h` } : { cls: "flat", txt: "quiet" }, spark: perBucket(() => 1), color: "var(--s-commit)", scrubFmt: "int", scrubLabel: "events", foot: `${settled} settled · ${term - settled} refunded or cancelled · ${b.length - term} live` },
+    { k: "Disputes", num: disputes, fmt: (v) => fmtInt(Math.round(v)), sub: { cls: "flat", txt: rulings.length ? `${rulings.length} ruled` : disputes ? "awaiting ruling" : "none raised" }, spark: cumulative((e) => e.eventName === "Disputed" ? 1 : 0), color: "var(--s-dispute)", scrubFmt: "int", scrubLabel: "disputes", foot: rulings.length ? `rulings: ${rulings.filter((r) => r === 1).length} seller · ${rulings.filter((r) => r === 2).length} buyer · ${rulings.filter((r) => r === 0).length} refused` : "ERC-792 arbitrator rules within the deadline or the reward splits" },
   ];
-  $("#stats").innerHTML = tiles.map((t, i) => `<div class="tile ${animate ? "in" : ""}" style="--d:${160 + i * 70}ms"><div class="k">${t.k}</div><div class="v"><span class="num" data-k="${t.k}"></span>${t.unit ? `<small>${t.unit}</small>` : ""}<span class="delta ${t.sub.cls}">${t.sub.txt}</span></div><div class="spark">${sparkline(t.spark, t.color)}</div><div class="foot">${t.foot}</div></div>`).join("");
+  const span = sparkSpan();
+  $("#stats").innerHTML = tiles.map((t, i) => { const svg = sparkline(t.spark, t.color); const m = sparkline.last; return `<div class="tile ${animate ? "in" : ""}" style="--d:${160 + i * 70}ms"><div class="k">${t.k}</div><div class="v"><span class="num" data-k="${t.k}"></span>${t.unit ? `<small>${t.unit}</small>` : ""}<span class="delta ${t.sub.cls}">${t.sub.txt}</span><span class="hv"></span></div><div class="spark" data-series="${t.spark.map((v) => +v.toFixed(4)).join(",")}" data-xs="${m.xs.join(",")}" data-ys="${m.ys.join(",")}" data-t0="${span.start}" data-step="${span.step}" data-fmt="${t.scrubFmt ?? (t.unit ? "eth" : "int")}" data-label="${t.scrubLabel ?? t.k.toLowerCase()}">${svg}</div><div class="foot">${t.foot}</div></div>`; }).join("");
   for (const t of tiles) { const el = $(`#stats .num[data-k="${t.k}"]`); if (t.num === null) el.textContent = t.fmt(null); else counter(`tile:${t.k}`, el, t.num, t.fmt, { dur: 1100 }); }
 }
 
@@ -297,6 +316,7 @@ function renderChart(animate = false) {
   const host = $("#chart");
   if (!S.refreshedAt) { host.innerHTML = `<div class="skel" style="position:absolute;inset:0"></div>`; $("#legend").innerHTML = CATS.map((c) => `<span><i class="c-${c.key}"></i>${c.name}</span>`).join(""); return; }
   const buckets = bucketize(UI.range);
+  for (const b of buckets) { for (const k of UI.hiddenCats) b.counts[k] = 0; b.total = Object.values(b.counts).reduce((x, y) => x + y, 0); }
   const W = Math.max(320, host.clientWidth), H = 260, pl = 34, pr = 8, pt = 16, pb = 26;
   const iw = W - pl - pr, ih = H - pt - pb;
   const max = Math.max(1, ...buckets.map((b) => b.total));
@@ -308,7 +328,7 @@ function renderChart(animate = false) {
   buckets.forEach((b, i) => {
     const x = pl + i * slot + (slot - bw) / 2;
     let acc = 0;
-    if (b.total) bars += `<g class="stack" style="--i:${i}">`;
+    if (b.total) bars += `<g class="stack" data-i="${i}" style="--i:${i}">`;
     for (const c of CATS) {
       const v = b.counts[c.key]; if (!v) continue;
       const y1 = y(acc + v), y0 = y(acc);
@@ -325,37 +345,49 @@ function renderChart(animate = false) {
   const xl = buckets.map((b, i) => (i % labelEvery === 0 ? `<text x="${pl + i * slot + slot / 2}" y="${H - 8}" text-anchor="middle">${esc(bucketLabel(b))}</text>` : "")).join("");
   const gl = ticks.map((t) => `<line x1="${pl}" x2="${W - pr}" y1="${y(t)}" y2="${y(t)}"/><text x="${pl - 8}" y="${y(t) + 4}" text-anchor="end" class="axis">${t}</text>`).join("");
   host.classList.toggle("animate", animate && !reduceMotion);
-  host.innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Contract events per ${buckets[0].step === 3600 ? "hour" : buckets[0].step === 86400 ? "day" : "6 hours"}"><g class="grid axis">${gl}</g><line class="base" x1="${pl}" x2="${W - pr}" y1="${pt + ih + .5}" y2="${pt + ih + .5}"/><g>${bars}</g><g class="axis">${xl}</g><g>${hits}</g></svg><div class="tooltip" id="tip" hidden></div>`;
-  host.querySelector("svg").addEventListener("mousemove", (ev) => {
-    const t = ev.target.closest(".hit"); const tip = $("#tip"); if (!t) { tip.hidden = true; return; }
+  host.innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Contract events per ${buckets[0].step < 3600 ? `${buckets[0].step / 60} minutes` : buckets[0].step === 3600 ? "hour" : buckets[0].step === 86400 ? "day" : "6 hours"}"><g class="grid axis">${gl}</g><line class="base" x1="${pl}" x2="${W - pr}" y1="${pt + ih + .5}" y2="${pt + ih + .5}"/><g>${bars}</g><g class="axis">${xl}</g><line class="cursor" id="chartCursor" x1="0" x2="0" y1="${pt}" y2="${pt + ih}" hidden/><g>${hits}</g></svg><div class="tooltip" id="tip" hidden></div>`;
+  const svgEl = host.querySelector("svg");
+  const clear = () => { $("#tip").hidden = true; host.removeAttribute("data-active"); $("#chartCursor").hidden = true; host.querySelectorAll(".stack.active").forEach((g) => g.classList.remove("active")); };
+  svgEl.addEventListener("mousemove", (ev) => {
+    const t = ev.target.closest(".hit"); const tip = $("#tip"); if (!t) { clear(); return; }
     const b = buckets[+t.dataset.i];
+    host.dataset.active = t.dataset.i;
+    host.querySelectorAll(".stack.active").forEach((g) => g.classList.remove("active"));
+    host.querySelector(`.stack[data-i="${t.dataset.i}"]`)?.classList.add("active");
+    const cx = pl + (+t.dataset.i + .5) * slot; const cur = $("#chartCursor"); cur.setAttribute("x1", cx); cur.setAttribute("x2", cx); cur.hidden = false;
     const rows = CATS.filter((c) => b.counts[c.key]).map((c) => `<div class="r"><span><i style="background:${c.color}"></i>${c.name}</span><b>${b.counts[c.key]}</b></div>`).join("") || `<div class="r muted">no events</div>`;
     tip.innerHTML = `<div class="t">${esc(bucketRange(b))}</div>${rows}${b.total ? `<div class="r" style="margin-top:4px;border-top:1px solid rgba(255,255,255,.15);padding-top:4px"><span>Total</span><b>${b.total}</b></div>` : ""}`;
     const r = host.getBoundingClientRect(), sx = W / r.width;
-    tip.style.left = `${Math.min(r.width - 90, Math.max(90, (pl + (+t.dataset.i + .5) * slot) / sx))}px`; tip.style.top = `${Math.max(0, y(b.total) / (H / r.height) - 10)}px`; tip.hidden = false;
+    tip.hidden = false;
+    const cxPx = cx / sx, flip = cxPx > r.width * 0.6;
+    tip.classList.toggle("flip", flip);
+    tip.style.left = `${cxPx + (flip ? -14 : 14)}px`;
+    tip.style.top = `${Math.min(Math.max(0, ev.clientY - r.top - 24), r.height - tip.offsetHeight - 4)}px`;
   });
-  host.querySelector("svg").addEventListener("mouseleave", () => { $("#tip").hidden = true; });
-  $("#legend").innerHTML = CATS.map((c) => `<span><i class="c-${c.key}"></i>${c.name}</span>`).join("");
+  svgEl.addEventListener("mouseleave", clear);
+  $("#legend").innerHTML = CATS.map((c) => `<button data-cat="${c.key}" aria-pressed="${!UI.hiddenCats.has(c.key)}" data-tip="Click to ${UI.hiddenCats.has(c.key) ? "show" : "hide"} this stage"><i class="c-${c.key}"></i>${c.name}</button>`).join("");
 }
 function roundTop(x, y, w, h, r) { r = Math.min(r, h); return `M${x},${y + h}V${y + r}a${r},${r} 0 0 1 ${r},-${r}h${w - 2 * r}a${r},${r} 0 0 1 ${r},${r}V${y + h}Z`; }
 function niceTicks(max, count) { const raw = max / count; const p = 10 ** Math.floor(Math.log10(raw)); const step = [1, 2, 5, 10].map((m) => m * p).find((s) => s >= raw); const top = Math.ceil(max / step) * step; const out = []; for (let v = 0; v <= top + 1e-9; v += step) out.push(v); return out; }
-function bucketLabel(b) { const d = new Date(b.t * 1000); return b.step >= 86400 ? d.toLocaleDateString([], { month: "short", day: "numeric" }) : d.toLocaleTimeString([], { hour: "numeric" }) + (b.step === 3600 ? "" : ` ${d.toLocaleDateString([], { month: "short", day: "numeric" })}`); }
+function bucketLabel(b) { const d = new Date(b.t * 1000); return b.step >= 86400 ? d.toLocaleDateString([], { month: "short", day: "numeric" }) : b.step < 3600 ? d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) : d.toLocaleTimeString([], { hour: "numeric" }) + (b.step === 3600 ? "" : ` ${d.toLocaleDateString([], { month: "short", day: "numeric" })}`); }
 function bucketRange(b) { const a = new Date(b.t * 1000), z = new Date((b.t + b.step) * 1000); return b.step >= 86400 ? a.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" }) : `${a.toLocaleDateString([], { month: "short", day: "numeric" })} ${a.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} – ${z.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`; }
 
 function renderFunnel(animate = false) {
   if (!S.refreshedAt) { $("#funnel").innerHTML = Array.from({ length: 6 }, (_, i) => `<div class="step"><span class="n">${i + 1}</span><div><div class="name skel">loading stage</div><div class="bar"></div></div><span class="cnt skel">0</span></div>`).join(""); return; }
   const c = stageCounts(), max = Math.max(1, c.created);
   const steps = [
-    ["Created", "buyer escrowed a reward", c.created],
-    ["Committed", "seller bonded a hidden bundle", c.committed],
-    ["Sampled", "blockhash-picked tasks revealed with proofs", c.sampled],
-    ["Approved", "buyer judged the sample sound", c.approved],
-    ["Delivered", "ciphertext posted to the buyer's key", c.delivered],
-    ["Accepted", "buyer reran the claims and paid", c.accepted],
+    ["Created", "buyer escrowed a reward", c.created, "created"],
+    ["Committed", "seller bonded a hidden bundle", c.committed, "committed"],
+    ["Sampled", "blockhash-picked tasks revealed with proofs", c.sampled, "sampled"],
+    ["Approved", "buyer judged the sample sound", c.approved, "approved"],
+    ["Delivered", "ciphertext posted to the buyer's key", c.delivered, "delivered"],
+    ["Accepted", "buyer reran the claims and paid", c.accepted, "accepted"],
   ];
   const go = animate && !reduceMotion;
-  $("#funnel").innerHTML = steps.map(([n, d, v], i) => `<div class="step"><span class="n ${v && !go ? "on" : ""}">${i + 1}</span><div><div class="name">${n} <span class="desc">· ${d}</span></div><div class="bar"><i data-w="${(v / max) * 100}" style="width:${go ? 0 : (v / max) * 100}%"></i></div></div><span class="cnt" data-k="${n}"></span></div>`).join("")
-    + `<div class="term"><span class="badge red">${c.disputed} disputed</span><span class="badge green">${c.settled} settled</span><span class="badge purple">${c.refunded} refunded</span><span class="badge gray">${c.split} split</span></div>`;
+  const tipFor = (k) => c.ids[k].length ? `${c.ids[k].length} bount${c.ids[k].length === 1 ? "y" : "ies"} reached this step: ${c.ids[k].join(" ")}` : "No bounty has reached this step yet";
+  for (const [k, n] of Object.entries(c.ids)) { const li = $(`#flow [data-stage="${k}"]`); if (!li) continue; li.classList.toggle("on", n.length > 0); li.setAttribute("data-tip", tipFor(k)); counter(`flow:${k}`, li.querySelector(".cnt"), n.length, (x) => String(Math.round(x)), { dur: 900 }); }
+  $("#funnel").innerHTML = steps.map(([n, d, v, k], i) => `<div class="step" data-tip="${tipFor(k)}"><span class="n ${v && !go ? "on" : ""}">${i + 1}</span><div><div class="name">${n} <span class="desc">· ${d}</span></div><div class="bar"><i data-w="${(v / max) * 100}" style="width:${go ? 0 : (v / max) * 100}%"></i></div></div><span class="cnt" data-k="${n}"></span></div>`).join("")
+    + `<div class="term"><span class="badge red" data-tip="${tipFor("disputed")}">${c.disputed} disputed</span><span class="badge green" data-tip="${tipFor("settled")}">${c.settled} settled</span><span class="badge purple" data-tip="${tipFor("refunded")}">${c.refunded} refunded</span><span class="badge gray" data-tip="${tipFor("split")}">${c.split} split</span></div>`;
   steps.forEach(([n, , v]) => counter(`funnel:${n}`, $(`#funnel .cnt[data-k="${n}"]`), v, (x) => String(Math.round(x)), { dur: 900 }));
   if (go) requestAnimationFrame(() => requestAnimationFrame(() => {
     $$("#funnel .bar i").forEach((el, i) => { el.style.transitionDelay = `${i * 60}ms`; el.style.width = `${el.dataset.w}%`; });
@@ -365,7 +397,7 @@ function renderFunnel(animate = false) {
 
 function bandHTML(s) {
   const w = Number(s.weakMaxBps) / 100, st = Number(s.strongMinBps) / 100;
-  return `<div class="band" title="weak ≤ ${w}% · strong ≥ ${st}% · null ≤ ${pct(s.nullMaxBps)} · tolerance ±${pct(s.toleranceBps)}"><div class="lbl"><span>${esc(s.weakModel)} ≤ ${w}%</span></div><div class="track"><span class="weak" style="width:${w}%"></span><span class="strong" style="width:${100 - st}%"></span></div><div class="lbl"><span>${esc(s.strongModel)} ≥ ${st}%</span><span>±${pct(s.toleranceBps)}</span></div></div>`;
+  return `<div class="band" data-tip="Difficulty band on pinned models: ${esc(s.weakModel)} must score ≤ ${w}%, ${esc(s.strongModel)} ≥ ${st}%, an empty-answer policy ≤ ${pct(s.nullMaxBps)}. Claims are checked to ±${pct(s.toleranceBps)}."><div class="lbl"><span>${esc(s.weakModel)} ≤ ${w}%</span></div><div class="track"><span class="weak" style="width:${w}%"></span><span class="strong" style="width:${100 - st}%"></span></div><div class="lbl"><span>${esc(s.strongModel)} ≥ ${st}%</span><span>±${pct(s.toleranceBps)}</span></div></div>`;
 }
 function matches(i, b) {
   const st = STATUS[b.status];
@@ -390,7 +422,7 @@ function renderBounties() {
       <td>${bandHTML(s)}</td>
       <td class="r num">${eth(b.reward)}${b.sellerBond > 0n ? `<div class="faint">bond ${eth(b.sellerBond)}</div>` : ""}</td>
       <td>${addr(b.buyer)}</td><td>${addr(b.seller)}</td>
-      <td class="nowrap">${last ? `<div>${last.eventName}</div><div class="faint label-12" title="${tsOf(last) ? fmtDateTime(tsOf(last)) : ""}">${tsOf(last) ? rel(tsOf(last)) : ""} ${tx(last.transactionHash, "")}</div>` : `<span class="faint">—</span>`}</td></tr>`);
+      <td class="nowrap">${last ? `<div>${last.eventName}</div><div class="faint label-12" data-tip="${tsOf(last) ? fmtDateTime(tsOf(last)) : ""}">${tsOf(last) ? rel(tsOf(last)) : ""} ${tx(last.transactionHash, "")}</div>` : `<span class="faint">—</span>`}</td></tr>`);
     if (open) rows.push(`<tr class="detail"><td colspan="9">${detailHTML(i, b, evs)}</td></tr>`);
   }
   tbody.innerHTML = rows.join("") || `<tr><td colspan="9" class="empty">${total ? "No bounties match this filter." : "No bounties yet. Run the buyer agent to post one."}</td></tr>`;
@@ -427,7 +459,7 @@ function renderReputation() {
 function renderLog() {
   const log = $("#log"); const atBottom = log.scrollHeight - log.scrollTop - log.clientHeight < 40 || !log.innerHTML;
   const evs = S.events.filter((e) => UI.logCats.has(catOf(e.eventName)));
-  log.innerHTML = evs.map((e) => { const c = CATS.find((x) => x.key === catOf(e.eventName)); return `<div class="ln"><span class="t">${tsOf(e) ? fmtTime(tsOf(e)) : `#${e.blockNumber}`}</span><span class="ev"><i style="background:${c.color}"></i>${e.eventName}</span><span class="m">${narrate(e)}</span>${tx(e.transactionHash, "")}</div>`; }).join("") || `<div class="empty" style="padding:28px;text-align:center" class="faint">No events yet.</div>`;
+  log.innerHTML = evs.map((e) => { const c = CATS.find((x) => x.key === catOf(e.eventName)); const isNew = S.events.indexOf(e) >= newFrom; return `<div class="ln${isNew ? " new" : ""}"><span class="t">${tsOf(e) ? fmtTime(tsOf(e)) : `#${e.blockNumber}`}</span><span class="ev"><i style="background:${c.color}"></i>${e.eventName}</span><span class="m">${narrate(e)}</span>${tx(e.transactionHash, "")}</div>`; }).join("") || `<div class="empty" style="padding:28px;text-align:center" class="faint">No events yet.</div>`;
   if (atBottom) log.scrollTop = log.scrollHeight;
   $("#cntLog").textContent = S.events.length;
   $("#logChips").innerHTML = CATS.map((c) => `<button class="chip" data-cat="${c.key}" aria-pressed="${UI.logCats.has(c.key)}"><i class="c-${c.key}"></i>${c.name}</button>`).join("");
@@ -442,7 +474,8 @@ function setTab(t) {
 }
 document.addEventListener("click", (ev) => {
   const tab = ev.target.closest("[data-tab]"); if (tab) { setTab(tab.dataset.tab); if (!tab.closest("#tabs")) $("#tabs").scrollIntoView({ behavior: "smooth", block: "start" }); return; }
-  const range = ev.target.closest("#rangeSeg button"); if (range) { UI.range = range.dataset.range; $$("#rangeSeg button").forEach((b) => b.setAttribute("aria-pressed", b === range)); renderChart(true); return; }
+  const range = ev.target.closest("#rangeSeg button"); if (range) { setRange(range.dataset.range, true); renderChart(true); return; }
+  const leg = ev.target.closest("#legend button"); if (leg) { const k = leg.dataset.cat; UI.hiddenCats.has(k) ? UI.hiddenCats.delete(k) : UI.hiddenCats.add(k); renderChart(true); return; }
   const status = ev.target.closest("#statusSeg button"); if (status) { UI.status = status.dataset.status; $$("#statusSeg button").forEach((b) => b.setAttribute("aria-pressed", b === status)); renderBounties(); return; }
   const chip = ev.target.closest("#logChips .chip"); if (chip) { const k = chip.dataset.cat; UI.logCats.has(k) ? UI.logCats.delete(k) : UI.logCats.add(k); renderLog(); return; }
   const row = ev.target.closest("tr.row"); if (row && !ev.target.closest("a")) { const i = +row.dataset.i; UI.expanded.has(i) ? UI.expanded.delete(i) : UI.expanded.add(i); renderBounties(); return; }
@@ -455,6 +488,41 @@ $("#themeBtn").addEventListener("click", () => {
   try { localStorage.setItem("eb-theme", next); } catch {}
 });
 let rt; addEventListener("resize", () => { clearTimeout(rt); rt = setTimeout(() => renderChart(false), 120); });
+
+// ---------- mouse layer ----------
+const gtip = $("#gtip");
+let tipEl = null;
+function showTip(el) {
+  tipEl = el;
+  gtip.textContent = el.dataset.tip; gtip.classList.toggle("mono", el.hasAttribute("data-tip-mono"));
+  const r = el.getBoundingClientRect(); const below = r.top < 90;
+  gtip.classList.toggle("below", below);
+  gtip.style.left = `${Math.min(innerWidth - 24, Math.max(24, r.left + r.width / 2))}px`;
+  gtip.style.top = `${below ? r.bottom : r.top}px`;
+  gtip.classList.add("on");
+}
+document.addEventListener("mouseover", (ev) => { const el = ev.target.closest("[data-tip]"); if (el && el !== tipEl) showTip(el); else if (!el && tipEl) { tipEl = null; gtip.classList.remove("on"); } });
+document.addEventListener("mouseout", (ev) => { if (tipEl && !tipEl.contains(ev.relatedTarget)) { tipEl = null; gtip.classList.remove("on"); } });
+document.addEventListener("scroll", () => { if (tipEl) showTip(tipEl); }, { passive: true });
+document.addEventListener("mousemove", (ev) => {
+  const el = ev.target.closest(".card, .tile, .status-card, .flow li");
+  if (el) { const r = el.getBoundingClientRect(); el.style.setProperty("--mx", `${ev.clientX - r.left}px`); el.style.setProperty("--my", `${ev.clientY - r.top}px`); }
+  const sp = ev.target.closest(".spark");
+  if (sp) scrub(sp, ev);
+}, { passive: true });
+$("#hero").addEventListener("mousemove", (ev) => { const r = $("#hero").getBoundingClientRect(); $("#hero").style.setProperty("--hx", `${ev.clientX - r.left}px`); $("#hero").style.setProperty("--hy", `${ev.clientY - r.top}px`); }, { passive: true });
+document.addEventListener("mouseout", (ev) => { const sp = ev.target.closest?.(".spark"); if (sp && !sp.contains(ev.relatedTarget)) sp.closest(".tile").classList.remove("scrub"); });
+function scrub(sp, ev) {
+  const xs = sp.dataset.xs.split(",").map(Number), ys = sp.dataset.ys.split(",").map(Number), series = sp.dataset.series.split(",").map(Number);
+  const r = sp.getBoundingClientRect(); const px = ((ev.clientX - r.left) / r.width) * 100;
+  let i = 0; for (let k = 1; k < xs.length; k++) if (Math.abs(xs[k] - px) < Math.abs(xs[i] - px)) i = k;
+  sp.querySelector(".guide").style.left = `${xs[i]}%`;
+  const pt = sp.querySelector(".pt"); pt.style.left = `${xs[i]}%`; pt.style.top = `${ys[i]}%`;
+  const t = new Date((Number(sp.dataset.t0) + i * Number(sp.dataset.step)) * 1000);
+  const v = sp.dataset.fmt === "eth" ? `${series[i].toFixed(3)} ETH` : fmtInt(series[i]);
+  const tile = sp.closest(".tile"); tile.classList.add("scrub");
+  tile.querySelector(".hv").textContent = `${v} ${sp.dataset.label} · ${t.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`;
+}
 if (["bounties", "reputation", "log"].includes(location.hash.slice(1))) setTab(location.hash.slice(1));
 
 renderAll();
