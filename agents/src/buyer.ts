@@ -197,7 +197,7 @@ export async function buyerVerify(w: Wallet, id: bigint, provider: ModelProvider
 
 // ------------------------------------------------------------------ long-running loop
 
-export async function runBuyer(cfg = defaultBuyerConfig(), opts: { maxBounties?: number; who?: string; once?: boolean } = {}) {
+export async function runBuyer(cfg = defaultBuyerConfig(), opts: { maxBounties?: number; who?: string; once?: boolean; exitWhenDone?: boolean } = {}) {
   const who = opts.who ?? "buyer";
   const w = wallet(env.key("BUYER_KEY"));
   const provider = await getProvider();
@@ -205,6 +205,7 @@ export async function runBuyer(cfg = defaultBuyerConfig(), opts: { maxBounties?:
   const max = opts.maxBounties ?? 1;
   log(who, `online as ${w.account.address} (${provider.name} provider)`);
   const mine: bigint[] = [];
+  const lastStatus = new Map<string, number>();
   const count = await c.read.bountyCount();
   for (let i = 0n; i < count; i++) {
     const b = await c.read.getBounty([i]);
@@ -218,10 +219,22 @@ export async function runBuyer(cfg = defaultBuyerConfig(), opts: { maxBounties?:
         if (b.status === Status.Sampled) await buyerJudge(w, id, provider, who);
         else if (b.status === Status.Delivered) await buyerVerify(w, id, provider, who);
         if (![Status.Settled, Status.Refunded, Status.Cancelled].includes(b.status as 6 | 7 | 8)) live.push(id);
-        log(who, `#${id} is ${StatusName[(await c.read.getBounty([id])).status]}`);
+        const now = (await c.read.getBounty([id])).status;
+        if (lastStatus.get(id.toString()) !== now) {
+          lastStatus.set(id.toString(), now);
+          log(who, `#${id} is ${StatusName[now]}`);
+        }
       }
-      if (live.length === 0 && mine.length < max) mine.push(await createBounty(w, cfg, who));
+      let created = false;
+      if (live.length === 0 && mine.length < max) {
+        mine.push(await createBounty(w, cfg, who));
+        created = true;
+      }
       await withdrawIfAny(w, who);
+      if (opts.exitWhenDone && !created && live.length === 0 && mine.length >= max) {
+        log(who, `all ${max} bounties reached a terminal state; exiting`);
+        return;
+      }
     } catch (e) {
       log(who, `error: ${(e as Error).message}`);
     }
@@ -232,7 +245,7 @@ export async function runBuyer(cfg = defaultBuyerConfig(), opts: { maxBounties?:
 
 if (process.argv[1] && /buyer\.ts$/.test(process.argv[1])) {
   const n = Number(process.argv.find((a) => a.startsWith("--bounties="))?.split("=")[1] ?? 1);
-  runBuyer(defaultBuyerConfig(), { maxBounties: n }).catch((e) => {
+  runBuyer(defaultBuyerConfig(), { maxBounties: n, exitWhenDone: process.argv.includes("--exit-when-done") }).catch((e) => {
     console.error(e);
     process.exit(1);
   });

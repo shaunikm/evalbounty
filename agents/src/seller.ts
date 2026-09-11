@@ -178,6 +178,7 @@ export async function runSeller(opts: { junk?: boolean; forceDifficulty?: number
   const provider = await getProvider();
   const c = evalBounty(w);
   const attempted = new Set<string>();
+  const lastStatus = new Map<string, number>();
   log(who, `online as ${w.account.address} (${provider.name} provider${opts.junk ? ", JUNK mode" : opts.forceDifficulty ? `, forced difficulty ${opts.forceDifficulty}` : ""})`);
   for (;;) {
     try {
@@ -202,7 +203,10 @@ export async function runSeller(opts: { junk?: boolean; forceDifficulty?: number
         } else if (!mine && attempted.has(id.toString()) && b.status === Status.Open) {
           // reopened after our sample was rejected: do not retry the same bundle
         }
-        if (mine) log(who, `#${id} is ${StatusName[b.status]}`);
+        if (mine && lastStatus.get(id.toString()) !== b.status) {
+          lastStatus.set(id.toString(), b.status);
+          log(who, `#${id} is ${StatusName[b.status]}`);
+        }
       }
       await withdrawIfAny(w, who);
     } catch (e) {

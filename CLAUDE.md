@@ -64,6 +64,7 @@ pnpm --filter agents test                      # vitest
 pnpm --filter agents e2e                       # spawns anvil, full lifecycle incl. disputes; exit≠0 on failure
 CHAIN=sepolia pnpm --filter agents deploy      # deploy + fund agents (deployer must hold ≥0.02 SepoliaETH)
 pnpm --filter agents arbiter|seller|buyer      # long-running agents; run in three terminals
+#   seller --junk | --easy ; buyer -- --bounties=N --exit-when-done ; e2e -- --keep --no-spawn --story=happy
 pnpm --filter agents demo                      # one scripted run through all three stories
 ```
 

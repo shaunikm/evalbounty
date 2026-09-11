@@ -182,6 +182,8 @@ function narrate(ev, b) {
     case "Evidence": return `Evidence submitted by ${short(a._party)}: ${esc(a._evidence.slice(0,120))}`;
     case "Dispute": return `ERC-1497 dispute ${a._disputeID} registered with arbitrator ${short(a._arbitrator)}.`;
     case "MetaEvidence": return `Dispute policy published: ${esc(a._evidence)}`;
+    case "OwnershipTransferred": return `Contract deployed; owner is ${short(a.newOwner)}.`;
+    case "ArbitratorUpdated": return `Arbitrator set to ${short(a.arbitrator)}.`;
     default: return `${ev.eventName}`;
   }
 }
