@@ -83,7 +83,10 @@ try {
   };
   await prepareArbiter(ctx);
   const only = process.argv.find((a) => a.startsWith("--story="))?.split("=")[1];
-  for (const [name, story] of Object.entries(STORIES)) {
+  // `committee` switches the market's arbitrator; running `bad` after it covers BadDelivery through the committee as well.
+  const order = ["happy", "junk", "easy", "committee", "bad"] as const;
+  for (const name of order) {
+    const story = STORIES[name];
     if (only && only !== name) continue;
     const t = Date.now();
     await story(ctx);

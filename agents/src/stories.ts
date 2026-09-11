@@ -4,15 +4,19 @@
  *
  *   happy   honest seller -> sample approved -> claims reproduce -> Settled
  *   junk    junk seller   -> sample rejected -> bounty reopens -> honest seller completes it
- *   easy    dishonest seller ships easy tasks but claims the band -> ClaimsFailed dispute -> arbiter rules for buyer
- *   bad     seller delivers garbage ciphertext -> BadDelivery dispute -> arbiter rules for buyer
+ *   easy    dishonest seller ships easy tasks but claims the band -> ClaimsFailed dispute -> arbitrator rules for buyer
+ *   bad     seller delivers garbage ciphertext -> BadDelivery dispute -> arbitrator rules for buyer
+ *   committee  the easy story again with the market switched to the sortitioned staked committee
+ *
+ * Disputes settle through whichever ERC-792 arbitrator the bounty is pinned to: the single-key
+ * arbiter (arbitrate + giveRuling) or the committee (sortition, key handoff, commit-reveal, tally).
  */
 import { bytesToHex, type Address, type Hex } from "viem";
 import { arbitrate, arbiterRule, ensureArbiterPubKey } from "./arbiter.js";
 import { buyerHandoffKeys, buyerJudge, buyerVerify, createBounty, type BuyerConfig } from "./buyer.js";
 import { switchArbitrator } from "./deploy.js";
-import { commitVote, decideVote, drawIfNeeded, ensureStaked, executeIfReady, revealVote } from "./juror.js";
-import { DisputeKind, Status, StatusName, committee, eth, evalBounty, log, short, tx, waitForBlockAfter, type Wallet } from "./lib/chain.js";
+import { commitVote, decideVote, drawIfNeeded, ensureStaked, executeIfReady, revealVote, richest } from "./juror.js";
+import { DisputeKind, Status, StatusName, arbitratorKind, committee, eth, evalBounty, log, short, tx, waitForBlockAfter, type Wallet } from "./lib/chain.js";
 import type { KeyPairHex } from "./lib/crypto.js";
 import type { ModelProvider } from "./lib/models.js";
 import { prepareBundle, sellerCommit, sellerDeliver, sellerReveal, sellerSalt, withdrawIfAny } from "./seller.js";
@@ -57,13 +61,55 @@ async function honestFulfil(ctx: Ctx, id: bigint) {
   await expectStatus(id, Status.Settled);
 }
 
+/**
+ * Full committee round for a Disputed bounty: wait for the sortition block, draw the panel, hand the
+ * bundle key to the drawn jurors (ClaimsFailed only; BadDelivery evidence is public), each seated
+ * juror reruns and commits a hidden vote, reveals, then anyone tallies. Permissionless calls go
+ * through the best-funded juror wallet. Returns the seated juror wallets.
+ */
+async function settleViaCommittee(ctx: Ctx, id: bigint, committeeAddr: Address): Promise<Wallet[]> {
+  const jurors = ctx.jurors ?? [];
+  expect(jurors.length > 0, `bounty #${id} is arbitrated by committee ${committeeAddr}; set JUROR_KEYS so the demo can seat the panel (or switch the market back)`);
+  const cm = committee(committeeAddr);
+  const b = await evalBounty().read.getBounty([id]);
+  const d0 = await cm.read.getDispute([b.disputeId]);
+  await waitForBlockAfter(d0[4], "juror");
+  const payer = await richest(jurors);
+  const panel = await drawIfNeeded(payer, committeeAddr, b.disputeId, "juror");
+  expect(panel.length === Number(await cm.read.panelSize()), "panel drawn");
+  if (b.disputeKind === DisputeKind.ClaimsFailed) expect(await buyerHandoffKeys(ctx.buyer, id), "buyer sealed the bundle key to the panel");
+  else log("story", "BadDelivery: the evidence is public, jurors need no key handoff");
+  const onPanel = jurors.filter((w) => panel.map((a) => a.toLowerCase()).includes(w.account.address.toLowerCase()));
+  expect(onPanel.length === panel.length, `demo controls every drawn juror (${onPanel.length}/${panel.length})`);
+  for (const w of onPanel) {
+    const decision = await decideVote(w, committeeAddr, b.disputeId, ctx.provider, "juror");
+    expect(decision !== undefined, "juror could evaluate");
+    log("juror", `${short(w.account.address)} votes ${["refuse", "seller", "buyer"][decision!.vote]}: ${decision!.why.slice(0, 100)}`);
+    await commitVote(w, committeeAddr, b.disputeId, decision!.vote, "juror");
+  }
+  for (const w of onPanel) await revealVote(w, committeeAddr, b.disputeId, "juror");
+  expect(await executeIfReady(payer, committeeAddr, b.disputeId, "juror"), "tally executed");
+  return onPanel;
+}
+
+/** Settle a Disputed bounty through whichever ERC-792 arbitrator it is pinned to. */
+async function settleDispute(ctx: Ctx, id: bigint) {
+  const b = await evalBounty().read.getBounty([id]);
+  if ((await arbitratorKind(b.arbitrator)) === "committee") {
+    await settleViaCommittee(ctx, id, b.arbitrator);
+  } else {
+    const decision = await arbitrate(id, ctx.provider, ctx.arbiterKp);
+    await arbiterRule(ctx.arbiter, b.disputeId, decision);
+  }
+}
+
 /** Call once before any story: makes the on-chain arbiter key match the derived one. */
 export async function prepareArbiter(ctx: Ctx) {
   await ensureArbiterPubKey(ctx.arbiter, ctx.arbiterKp);
 }
 
 export async function storyHappy(ctx: Ctx) {
-  log("story", "━━ 1/4 happy path: honest seller, honest buyer");
+  log("story", "━━ 1/5 happy path: honest seller, honest buyer");
   const id = await createBounty(ctx.buyer, ctx.cfg);
   await honestFulfil(ctx, id);
   const c = evalBounty();
@@ -74,7 +120,7 @@ export async function storyHappy(ctx: Ctx) {
 }
 
 export async function storyJunk(ctx: Ctx) {
-  log("story", "━━ 2/4 junk seller: unanswerable prompts, caught by the random sample");
+  log("story", "━━ 2/5 junk seller: unanswerable prompts, caught by the random sample");
   const id = await createBounty(ctx.buyer, ctx.cfg);
   const spec = (await evalBounty().read.getBounty([id])).spec;
   const prep = await prepareBundle(spec, ctx.provider, { seed: `junk-${id}`, junk: true, who: "junk" });
@@ -92,7 +138,7 @@ export async function storyJunk(ctx: Ctx) {
 }
 
 export async function storyEasy(ctx: Ctx) {
-  log("story", "━━ 3/4 dishonest seller: well-posed but too-easy tasks, claims the band anyway");
+  log("story", "━━ 3/5 dishonest seller: well-posed but too-easy tasks, claims the band anyway");
   const id = await createBounty(ctx.buyer, ctx.cfg);
   const spec = (await evalBounty().read.getBounty([id])).spec;
   const prep = await prepareBundle(spec, ctx.provider, { seed: `easy-${id}`, forceDifficulty: 1, who: "seller", saltFor: sellerSalt(ctx.seller, id) });
@@ -105,8 +151,7 @@ export async function storyEasy(ctx: Ctx) {
   expect(v.verdict.action === "dispute" && v.verdict.kind === DisputeKind.ClaimsFailed, `expected ClaimsFailed dispute, got ${JSON.stringify(v.verdict.action)}`);
   await expectStatus(id, Status.Disputed);
   const b = await evalBounty().read.getBounty([id]);
-  const decision = await arbitrate(id, ctx.provider, ctx.arbiterKp);
-  await arbiterRule(ctx.arbiter, b.disputeId, decision);
+  await settleDispute(ctx, id);
   await expectStatus(id, Status.Refunded);
   const owed = await evalBounty().read.pending([ctx.buyer.account.address]);
   expect(owed >= b.reward + b.disputeBond + b.sellerBond, "buyer gets reward + own bond + seller bond");
@@ -116,7 +161,7 @@ export async function storyEasy(ctx: Ctx) {
 }
 
 export async function storyBadDelivery(ctx: Ctx) {
-  log("story", "━━ 4/4 bad delivery: seller posts garbage ciphertext after an approved sample");
+  log("story", "━━ 4/5 bad delivery: seller posts garbage ciphertext after an approved sample");
   const id = await createBounty(ctx.buyer, ctx.cfg);
   const spec = (await evalBounty().read.getBounty([id])).spec;
   const prep = await prepareBundle(spec, ctx.provider, { seed: `bad-${id}`, saltFor: sellerSalt(ctx.seller, id) });
@@ -130,10 +175,8 @@ export async function storyBadDelivery(ctx: Ctx) {
   await tx("seller", `deliver #${id} (garbage)`, () => evalBounty(ctx.seller).write.deliver([id, bytesToHex(garbage)]));
   const v = await buyerVerify(ctx.buyer, id, ctx.provider);
   expect(v.verdict.action === "dispute" && v.verdict.kind === DisputeKind.BadDelivery, "expected BadDelivery dispute");
-  const b = await evalBounty().read.getBounty([id]);
-  const decision = await arbitrate(id, ctx.provider, ctx.arbiterKp);
-  expect(decision.ruling === 2n, "arbiter should rule for the buyer");
-  await arbiterRule(ctx.arbiter, b.disputeId, decision);
+  await expectStatus(id, Status.Disputed);
+  await settleDispute(ctx, id);
   await expectStatus(id, Status.Refunded);
   await withdrawIfAny(ctx.buyer, "buyer");
   return id;
@@ -171,31 +214,19 @@ export async function storyCommittee(ctx: Ctx) {
   expect(v.verdict.action === "dispute" && v.verdict.kind === DisputeKind.ClaimsFailed, "expected ClaimsFailed dispute");
   await expectStatus(id, Status.Disputed);
 
-  const b = await evalBounty().read.getBounty([id]);
-  const d0 = await cm.read.getDispute([b.disputeId]);
-  await waitForBlockAfter(d0[4], "juror");
-  const panel = await drawIfNeeded(ctx.jurors[0]!, ctx.committee, b.disputeId, "juror");
-  expect(panel.length === Number(await cm.read.panelSize()), "panel drawn");
-  expect(await buyerHandoffKeys(ctx.buyer, id), "buyer sealed the bundle key to the panel");
-
-  const onPanel = ctx.jurors.filter((w) => panel.map((a) => a.toLowerCase()).includes(w.account.address.toLowerCase()));
-  expect(onPanel.length === panel.length, `demo controls every drawn juror (${onPanel.length}/${panel.length})`);
   const stakesBefore = new Map<string, bigint>();
-  for (const w of onPanel) {
+  const pendingBefore = new Map<string, bigint>();
+  for (const w of ctx.jurors) {
     stakesBefore.set(w.account.address, (await cm.read.jurorInfo([w.account.address]))[0]);
-    const decision = await decideVote(w, ctx.committee, b.disputeId, ctx.provider, "juror");
-    expect(decision !== undefined, "juror could evaluate");
-    log("juror", `${short(w.account.address)} votes ${["refuse", "seller", "buyer"][decision!.vote]}: ${decision!.why.slice(0, 100)}`);
-    await commitVote(w, ctx.committee, b.disputeId, decision!.vote, "juror");
+    pendingBefore.set(w.account.address, await cm.read.pending([w.account.address]));
   }
-  for (const w of onPanel) await revealVote(w, ctx.committee, b.disputeId, "juror");
-  expect(await executeIfReady(ctx.jurors[0]!, ctx.committee, b.disputeId, "juror"), "tally executed");
+  const onPanel = await settleViaCommittee(ctx, id, ctx.committee);
   await expectStatus(id, Status.Refunded);
   const fee = await cm.read.jurorFee();
   for (const w of onPanel) {
     const stake = (await cm.read.jurorInfo([w.account.address]))[0];
     expect(stake === stakesBefore.get(w.account.address), "coherent juror keeps full stake");
-    expect((await cm.read.pending([w.account.address])) === fee, "coherent juror earns its fee share");
+    expect((await cm.read.pending([w.account.address])) - pendingBefore.get(w.account.address)! === fee, "coherent juror earns its fee share");
   }
   log("story", `unanimous panel: nobody slashed, each juror earned ${eth(fee)}; the dishonest seller's bond went to the buyer`);
   await withdrawIfAny(ctx.buyer, "buyer");

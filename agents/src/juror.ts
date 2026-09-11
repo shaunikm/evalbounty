@@ -58,6 +58,25 @@ export async function disputeContext(disputeId: bigint, committeeAddr: Address):
   return undefined;
 }
 
+/**
+ * The wallet with the most gas money. Permissionless calls (drawPanel, execute) go through it so a
+ * juror wallet that ran dry never stalls a panel it is not even required to pay for.
+ */
+export async function richest(wallets: Wallet[]): Promise<Wallet> {
+  if (wallets.length === 0) throw new Error("no juror wallets");
+  const pc = publicClient();
+  let best = wallets[0]!;
+  let bestBalance = -1n;
+  for (const w of wallets) {
+    const bal = await pc.getBalance({ address: w.account.address });
+    if (bal > bestBalance) {
+      best = w;
+      bestBalance = bal;
+    }
+  }
+  return best;
+}
+
 export async function drawIfNeeded(w: Wallet, committeeAddr: Address, disputeId: bigint, who = "juror"): Promise<Address[]> {
   const cm = committee(committeeAddr, w);
   const d = await cm.read.getDispute([disputeId]);
@@ -140,13 +159,14 @@ export async function executeIfReady(w: Wallet, committeeAddr: Address, disputeI
 export async function jurorPass(wallets: Wallet[], committeeAddr: Address, provider: ModelProvider, who = "juror"): Promise<boolean> {
   const cm = committee(committeeAddr);
   const n = await cm.read.disputeCount();
+  const payer = await richest(wallets);
   let acted = false;
   for (let id = 0n; id < n; id++) {
     const d = await cm.read.getDispute([id]);
     if (d[3] !== 0) continue; // solved
     let panel = [...d[5]].map((a) => a.toLowerCase());
     if (panel.length === 0) {
-      panel = (await drawIfNeeded(wallets[0]!, committeeAddr, id, who)).map((a) => a.toLowerCase());
+      panel = (await drawIfNeeded(payer, committeeAddr, id, who)).map((a) => a.toLowerCase());
       if (panel.length === 0) continue;
       acted = true;
     }
@@ -171,7 +191,7 @@ export async function jurorPass(wallets: Wallet[], committeeAddr: Address, provi
         acted = true;
       }
     }
-    if (await executeIfReady(wallets[0]!, committeeAddr, id, who)) acted = true;
+    if (await executeIfReady(payer, committeeAddr, id, who)) acted = true;
   }
   return acted;
 }
@@ -191,7 +211,11 @@ export async function runJurors(opts: { once?: boolean; who?: string } = {}) {
   for (const w of wallets) await ensureStaked(w, committeeAddr, undefined, who);
   for (;;) {
     try {
-      await jurorPass(wallets, committeeAddr, provider, who);
+      // --once: keep going while progress is being made (commit -> reveal -> execute can all happen in one call)
+      for (let round = 0; round < 4; round++) {
+        const acted = await jurorPass(wallets, committeeAddr, provider, who);
+        if (!acted || !opts.once) break;
+      }
       for (const w of wallets) {
         const owed = await committee(committeeAddr).read.pending([w.account.address]);
         if (owed > 0n) await tx(who, `withdraw ${eth(owed)} juror earnings`, () => committee(committeeAddr, w).write.withdraw());

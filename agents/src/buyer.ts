@@ -375,7 +375,7 @@ export async function runBuyer(cfg = defaultBuyerConfig(), opts: { maxBounties?:
 
 if (process.argv[1] && /buyer\.ts$/.test(process.argv[1])) {
   const n = Number(process.argv.find((a) => a.startsWith("--bounties="))?.split("=")[1] ?? 1);
-  runBuyer(defaultBuyerConfig(), { maxBounties: n, exitWhenDone: process.argv.includes("--exit-when-done") }).catch((e) => {
+  runBuyer(defaultBuyerConfig(), { maxBounties: n, exitWhenDone: process.argv.includes("--exit-when-done"), once: process.argv.includes("--once") }).catch((e) => {
     console.error(e);
     process.exit(1);
   });

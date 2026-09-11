@@ -1,10 +1,12 @@
 /**
  * Scripted demo on the configured chain (Sepolia by default via agents/.env).
  *
- *   pnpm --filter agents demo                 # all four stories
- *   pnpm --filter agents demo --story=happy   # one of: happy | junk | easy | bad
+ *   pnpm --filter agents demo                 # all five stories
+ *   pnpm --filter agents demo --story=happy   # one of: happy | junk | easy | bad | committee
  *
- * Same code path as the anvil e2e test, just with real block times and Etherscan links.
+ * Same code path as the anvil e2e test, just with real block times and explorer links. Disputes
+ * settle through whichever arbitrator the market points at; with the committee live, JUROR_KEYS
+ * must be set so the demo can seat the drawn panel.
  */
 import { defaultBuyerConfig } from "./buyer.js";
 import { loadOrCreateArbiterKeys } from "./deploy.js";
