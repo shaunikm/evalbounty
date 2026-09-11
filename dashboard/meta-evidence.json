@@ -1,0 +1,17 @@
+{
+  "title": "EvalBounty dispute",
+  "description": "A buyer disputes a delivered evaluation bundle. BadDelivery: the buyer publishes its per-bounty X25519 secret; the arbitrator decrypts the event-log ciphertext and checks keccak256(plaintext) == bundleCommitment and the rebuilt Merkle root == taskRoot. ClaimsFailed: the buyer seals the bundle key to the arbitrator; the arbitrator reruns the pinned weak/strong/null claims with the committed run params and the buyer's tolerance.",
+  "rulingOptions": {
+    "type": "single-select",
+    "titles": ["Refuse to arbitrate", "Seller wins", "Buyer wins"],
+    "descriptions": [
+      "Reward split 50/50, both bonds returned.",
+      "Delivery and claims are sound: seller receives reward minus fee, its bond, and the buyer's dispute bond.",
+      "Delivery or claims are not sound: buyer receives the reward, its dispute bond, and the seller's bond."
+    ]
+  },
+  "category": "Data / evaluation goods",
+  "question": "Does the delivered bundle match its commitment, and do the buyer-specified difficulty claims reproduce within tolerance?",
+  "fileURI": "https://github.com/shaunikm/technical-interview/blob/main/README.md",
+  "evidenceDisplayInterfaceURI": "https://shaunikm.github.io/technical-interview/"
+}

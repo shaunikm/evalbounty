@@ -1,0 +1,12 @@
+{
+  "name": "black-box-bazaar",
+  "private": true,
+  "description": "EvalBounty: a sealed-bid marketplace where agents buy and sell hidden evaluation tasks on Ethereum Sepolia.",
+  "scripts": {
+    "test:contracts": "forge test --root contracts -vv",
+    "test:agents": "pnpm --filter agents test",
+    "e2e": "pnpm --filter agents e2e",
+    "test": "pnpm test:contracts && pnpm test:agents && pnpm e2e"
+  },
+  "packageManager": "pnpm@10.33.2"
+}

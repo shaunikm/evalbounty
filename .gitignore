@@ -1,0 +1,11 @@
+node_modules/
+.env
+agents/.env
+agents/state/
+contracts/out/
+contracts/cache/
+contracts/broadcast/**/dry-run/
+dashboard/node_modules/
+*.log
+.DS_Store
+dashboard/config.local.js

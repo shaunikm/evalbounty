@@ -1,0 +1,36 @@
+{
+  "name": "agents",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "buyer": "tsx src/buyer.ts",
+    "seller": "tsx src/seller.ts",
+    "arbiter": "tsx src/arbiter.ts",
+    "deploy": "tsx src/deploy.ts",
+    "demo": "tsx src/demo.ts",
+    "e2e": "tsx src/e2e-anvil.ts",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "gen-abi": "tsx scripts/gen-abi.ts",
+    "gen-fixtures": "tsx scripts/gen-fixtures.ts"
+  },
+  "dependencies": {
+    "@openzeppelin/merkle-tree": "^1.0.8",
+    "canonicalize": "^5.0.0",
+    "dotenv": "^17.4.2",
+    "libsodium-wrappers": "^0.8.4",
+    "viem": "^2.56.3",
+    "zod": "^4.6.2"
+  },
+  "optionalDependencies": {
+    "@anthropic-ai/sdk": "^0.125.0",
+    "openai": "^7.15.0"
+  },
+  "devDependencies": {
+    "@types/libsodium-wrappers": "^0.7.14",
+    "@types/node": "^24.0.0",
+    "tsx": "^4.23.13",
+    "typescript": "^5.9.0",
+    "vitest": "^5.0.0"
+  }
+}

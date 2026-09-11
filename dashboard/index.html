@@ -1,0 +1,258 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>EvalBounty — Black Box Bazaar for AI evals</title>
+<meta name="description" content="A sealed marketplace on Ethereum Sepolia where agents buy and sell hidden AI evaluation tasks. Commit, random sample, encrypted delivery, reproducible claims, arbitration." />
+<style>
+  :root {
+    --bg: #0b0f14; --panel: #121821; --panel-2: #0f141c; --border: #1f2a37; --text: #e6edf3; --muted: #8b98a8;
+    --accent: #7dd3fc; --ok: #4ade80; --warn: #fbbf24; --bad: #f87171; --violet: #c4b5fd; --mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+  a { color: var(--accent); text-decoration: none; } a:hover { text-decoration: underline; }
+  code, .mono { font-family: var(--mono); font-size: 0.92em; }
+  header { padding: 40px 24px 20px; max-width: 1180px; margin: 0 auto; }
+  h1 { margin: 0 0 6px; font-size: 30px; letter-spacing: -0.02em; }
+  h1 small { color: var(--muted); font-weight: 400; font-size: 16px; margin-left: 8px; }
+  .lede { color: var(--muted); max-width: 900px; margin: 6px 0 18px; font-size: 16px; }
+  .steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; margin: 16px 0 6px; }
+  .step { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; }
+  .step b { display: block; color: var(--accent); font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 4px; }
+  .step span { color: var(--muted); font-size: 13px; }
+  main { max-width: 1180px; margin: 0 auto; padding: 0 24px 60px; display: grid; gap: 22px; }
+  section { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 18px 20px; }
+  section h2 { margin: 0 0 12px; font-size: 17px; display: flex; align-items: center; gap: 10px; }
+  section h2 .sub { color: var(--muted); font-weight: 400; font-size: 13px; }
+  .statusbar { display: flex; flex-wrap: wrap; gap: 18px; align-items: center; color: var(--muted); font-size: 13px; }
+  .statusbar .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--ok); display: inline-block; margin-right: 6px; box-shadow: 0 0 8px var(--ok); }
+  .pill { display: inline-block; padding: 2px 9px; border-radius: 999px; font-size: 12px; font-weight: 600; letter-spacing: 0.02em; border: 1px solid transparent; }
+  .s-Open { color: var(--accent); border-color: var(--accent); }
+  .s-Committed, .s-Sampled, .s-Approved, .s-Delivered { color: var(--warn); border-color: var(--warn); }
+  .s-Disputed { color: var(--bad); border-color: var(--bad); }
+  .s-Settled { color: var(--ok); border-color: var(--ok); }
+  .s-Refunded { color: var(--violet); border-color: var(--violet); }
+  .s-Cancelled { color: var(--muted); border-color: var(--muted); }
+  table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { color: var(--muted); font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; }
+  tr.bounty { cursor: pointer; } tr.bounty:hover { background: var(--panel-2); }
+  tr.detail td { background: var(--panel-2); padding: 14px 16px; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; } @media (max-width: 900px) { .grid2 { grid-template-columns: 1fr; } }
+  .timeline { list-style: none; margin: 0; padding: 0; }
+  .timeline li { padding: 5px 0 5px 16px; border-left: 2px solid var(--border); position: relative; font-size: 13px; }
+  .timeline li::before { content: ""; position: absolute; left: -5px; top: 11px; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
+  .timeline .t { color: var(--muted); font-family: var(--mono); font-size: 11.5px; margin-right: 8px; }
+  .task { background: #0b1017; border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; margin: 8px 0; font-size: 13px; }
+  .task .idx { color: var(--violet); font-family: var(--mono); }
+  .task .ref { color: var(--ok); font-family: var(--mono); }
+  .band { font-family: var(--mono); font-size: 12.5px; color: var(--muted); }
+  .log { max-height: 420px; overflow: auto; font-family: var(--mono); font-size: 12.5px; line-height: 1.55; }
+  .log div { padding: 3px 0; border-bottom: 1px dashed #18212c; }
+  .log .who { color: var(--accent); }
+  .muted { color: var(--muted); } .ok { color: var(--ok); } .bad { color: var(--bad); } .warn { color: var(--warn); }
+  .kv { display: grid; grid-template-columns: 150px 1fr; gap: 4px 12px; font-size: 13px; }
+  .kv b { color: var(--muted); font-weight: 500; }
+  .empty { color: var(--muted); font-style: italic; padding: 10px 0; }
+  footer { max-width: 1180px; margin: 0 auto; padding: 0 24px 40px; color: var(--muted); font-size: 13px; }
+  .limitation { border-left: 3px solid var(--warn); padding: 8px 12px; background: var(--panel-2); border-radius: 6px; margin-top: 14px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>EvalBounty <small>the Black Box Bazaar for AI evaluations · Ethereum Sepolia</small></h1>
+  <p class="lede">
+    AI labs pay for <b>fresh, hard evaluation tasks</b>, and a task loses its value the moment it is seen (contamination), so the buyer
+    cannot inspect the goods before paying. Here a <b>buyer agent</b> posts a bounty that defines value in a way a machine can check
+    (size, domain, and a difficulty band on pinned models); a <b>seller agent</b> commits to a hidden bundle with a bond; the
+    <b>hash of the next block</b> picks a random sample the seller must reveal with Merkle proofs; the rest is delivered
+    <b>encrypted</b>; the buyer <b>re-runs the difficulty claims</b> and pays, or disputes to a bonded <b>arbiter</b>. Every step below is a real transaction.
+  </p>
+  <div class="steps">
+    <div class="step"><b>1 · Bounty</b><span>Buyer escrows the reward and pins models, band, tolerance and run params.</span></div>
+    <div class="step"><b>2 · Commit</b><span>Seller posts Merkle root + bundle hash + bond ≥ 50 % of reward. Sample block = next block.</span></div>
+    <div class="step"><b>3 · Sample</b><span>blockhash picks k of N tasks; seller must reveal exactly those with proofs.</span></div>
+    <div class="step"><b>4 · Judge</b><span>Buyer checks the sample is well-posed and in domain, approves or walks away.</span></div>
+    <div class="step"><b>5 · Deliver</b><span>Bundle encrypted to the buyer's X25519 key, posted in the event log.</span></div>
+    <div class="step"><b>6 · Verify</b><span>Buyer decrypts, checks hash + root, re-runs claims, accepts or disputes (ERC-792 arbiter).</span></div>
+  </div>
+</header>
+<main>
+  <section>
+    <div class="statusbar" id="statusbar"><span class="dot"></span><span>connecting…</span></div>
+  </section>
+
+  <section>
+    <h2>Bounties <span class="sub" id="bountyCount"></span></h2>
+    <div style="overflow-x:auto"><table id="bounties"><thead><tr>
+      <th>#</th><th>Status</th><th>Spec</th><th>Band</th><th>Reward</th><th>Buyer</th><th>Seller</th><th>Last event</th>
+    </tr></thead><tbody></tbody></table></div>
+    <div class="empty" id="bountiesEmpty" hidden>No bounties yet. Run the buyer agent to post one.</div>
+  </section>
+
+  <div class="grid2">
+    <section>
+      <h2>Seller reputation <span class="sub">on-chain counters</span></h2>
+      <div style="overflow-x:auto"><table id="sellers"><thead><tr><th>Seller</th><th>Commits</th><th>Rejected</th><th>Abandoned</th><th>Delivered</th><th>Timeouts</th><th>Settled</th><th>Won</th><th>Lost</th><th>Volume</th></tr></thead><tbody></tbody></table></div>
+    </section>
+    <section>
+      <h2>Buyer reputation</h2>
+      <div style="overflow-x:auto"><table id="buyers"><thead><tr><th>Buyer</th><th>Created</th><th>Settled</th><th>Disputes</th><th>Lost</th></tr></thead><tbody></tbody></table></div>
+    </section>
+  </div>
+
+  <section>
+    <h2>Agent log <span class="sub">every contract event, in plain English, newest last</span></h2>
+    <div class="log" id="log"></div>
+  </section>
+
+  <section>
+    <h2>Mechanism notes</h2>
+    <div class="kv">
+      <b>Why a random sample</b><span>The seller commits before knowing which tasks are shown. A bundle with junk fraction f survives a k-task sample with probability (1−f)<sup>k</sup>: at k = 4, 30 % junk is caught 76 % of the time. Walking away after seeing the sample costs 10 % of the bond, so re-rolling is priced.</span>
+      <b>Why claims, not "quality"</b><span>"Weak model ≤ 35 %, strong model ≥ 65 %, null policy ≤ 5 %" is reproducible by the buyer and the arbiter with the committed run params; "useful" is not. Tolerance ≥ 2·SE (Miller 2024) absorbs rerun noise.</span>
+      <b>Why Sepolia L1</b><span>Sampling uses <code>blockhash(sampleBlock)</code>. Arbitrum documents its blockhash as "cryptographically insecure, pseudo-random" and returns constant 1 for <code>prevrandao</code>; the mechanism is stronger on L1.</span>
+      <b>Why ERC-792</b><span>Disputes go through Kleros' arbitration interface, so the single bonded arbiter used here can be swapped for a court with one <code>setArbitrator</code> call. Rulings: 1 seller, 2 buyer, 0 refused → 50/50 split.</span>
+      <b>Liveness</b><span>Every state has a deadline anyone can <code>finalize</code>: missed delivery slashes the seller, silent buyer settles to the seller, silent arbiter splits. Payouts are pull-payments.</span>
+    </div>
+    <div class="limitation"><b>Limitation, stated plainly.</b> The contract enforces delivery and whether the listed difficulty claims hold. It does not verify that tasks are useful beyond the sampled ones, or that they stay secret after sale — that is a contract term backed by reputation, not cryptography.</div>
+  </section>
+</main>
+<footer>
+  Source, README and video: <a id="repoLink" href="https://github.com/shaunikm/technical-interview">github.com/shaunikm/technical-interview</a>.
+  Built for the Blockchain at Berkeley Fa'26 technical take-home.
+</footer>
+
+<script src="./config.js"></script>
+<script src="./config.local.js"></script><!-- optional local override (gitignored) -->
+<script src="./abi.js"></script>
+<script type="module">
+import { createPublicClient, http, parseEventLogs, formatEther } from "https://esm.sh/viem@2.56.3";
+import * as chains from "https://esm.sh/viem@2.56.3/chains";
+
+const cfg = window.EVALBOUNTY_CONFIG;
+const abi = window.EVALBOUNTY_ABI;
+const $ = (s) => document.querySelector(s);
+const STATUS = ["Open","Committed","Sampled","Approved","Delivered","Disputed","Settled","Refunded","Cancelled"];
+const short = (a) => a ? `${a.slice(0,6)}…${a.slice(-4)}` : "—";
+const addrLink = (a) => a && a !== "0x0000000000000000000000000000000000000000" ? `<a class="mono" href="${cfg.explorerBase}/address/${a}" target="_blank" rel="noopener">${short(a)}${label(a)}</a>` : `<span class="muted">—</span>`;
+const txLink = (h, text="tx") => `<a class="mono" href="${cfg.explorerBase}/tx/${h}" target="_blank" rel="noopener">${text}</a>`;
+const pct = (bps) => `${(Number(bps)/100).toFixed(0)}%`;
+const eth = (wei) => `${Number(formatEther(wei)).toFixed(4)} ETH`;
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+function label(a) {
+  const l = a.toLowerCase();
+  for (const [k, v] of Object.entries(cfg.agents ?? {})) if (v.toLowerCase() === l) return ` <span class="muted">(${k})</span>`;
+  return "";
+}
+
+const chain = Object.values(chains).find((c) => c && typeof c === "object" && c.id === cfg.chainId) ?? chains.sepolia;
+const client = createPublicClient({ chain, transport: http(cfg.rpcUrl) });
+const expanded = new Set();
+let lastRender = 0;
+
+function narrate(ev, b) {
+  const a = ev.args;
+  switch (ev.eventName) {
+    case "BountyCreated": return `Buyer ${short(a.buyer)} posted bounty #${a.id}: ${a.spec.taskCount} ${esc(a.spec.domainTag)} tasks, reveal ${a.spec.sampleSize}, band ${esc(a.spec.weakModel)} ≤ ${pct(a.spec.weakMaxBps)} / ${esc(a.spec.strongModel)} ≥ ${pct(a.spec.strongMinBps)}, reward ${eth(a.reward)}.`;
+    case "Committed": return `Seller ${short(a.seller)} committed to #${a.id}: root ${short(a.taskRoot)}, bundle hash ${short(a.bundleCommitment)}, bond ${eth(a.bond)}. Sample will be drawn from blockhash(${a.sampleBlock}).`;
+    case "SampleRevealed": { let t; try { t = JSON.parse(new TextDecoder().decode(hexToBytes(a.task))); } catch { t = null; } return `#${a.id}: revealed task ${a.index}${t ? ` — “${esc(t.prompt.slice(0,80))}${t.prompt.length>80?"…":""}”` : ""}.`; }
+    case "SampleComplete": return `#${a.id}: all sampled tasks revealed with valid Merkle proofs. Buyer has until ${ts(a.approveBy)} to judge.`;
+    case "SampleApproved": return `Buyer approved the sample of #${a.id}. Seller must deliver by ${ts(a.deliverBy)}.`;
+    case "SampleRejected": return `Buyer rejected the sample of #${a.id} from ${short(a.seller)}: “${esc(a.reason)}”. Bond returned, bounty reopened.`;
+    case "CommitWithdrawn": return `Seller ${short(a.seller)} withdrew its commit on #${a.id}${a.penalty > 0n ? ` and paid a ${eth(a.penalty)} penalty` : ""}.`;
+    case "Delivered": return `#${a.id}: ${((a.ciphertext.length-2)/2).toLocaleString()}-byte ciphertext delivered (hash ${short(a.ciphertextHash)}). Buyer has until ${ts(a.verifyBy)} to accept or dispute.`;
+    case "Accepted": return `Buyer accepted #${a.id}.`;
+    case "Disputed": return `Buyer disputed #${a.id} (${a.kind === 0 ? "BadDelivery" : "ClaimsFailed"}), arbitration dispute ${a.disputeId}. Arbiter must rule by ${ts(a.ruleBy)}.`;
+    case "Ruling": return `Arbitrator ruled dispute ${a._disputeID}: ${["refused → split","seller wins","buyer wins"][Number(a._ruling)] ?? a._ruling}.`;
+    case "Settled": return `#${a.id} settled: seller ${short(a.seller)} receives ${eth(a.sellerPayout)}, treasury fee ${eth(a.fee)}.`;
+    case "Refunded": return `#${a.id} refunded: buyer ${short(a.buyer)} receives ${eth(a.buyerPayout)}.`;
+    case "Split": return `#${a.id} split: buyer ${eth(a.buyerPayout)}, seller ${eth(a.sellerPayout)}.`;
+    case "Finalized": return `#${a.id} finalized: ${esc(a.reason)}.`;
+    case "Withdrawn": return `${short(a.account)} withdrew ${eth(a.amount)}.`;
+    case "BountyCancelled": return `#${a.id} cancelled by its buyer.`;
+    case "Evidence": return `Evidence submitted by ${short(a._party)}: ${esc(a._evidence.slice(0,120))}`;
+    case "Dispute": return `ERC-1497 dispute ${a._disputeID} registered with arbitrator ${short(a._arbitrator)}.`;
+    case "MetaEvidence": return `Dispute policy published: ${esc(a._evidence)}`;
+    default: return `${ev.eventName}`;
+  }
+}
+function hexToBytes(h) { const s = h.slice(2); const out = new Uint8Array(s.length/2); for (let i=0;i<out.length;i++) out[i]=parseInt(s.substr(i*2,2),16); return out; }
+function ts(sec) { return new Date(Number(sec)*1000).toLocaleTimeString(); }
+
+async function refresh() {
+  try {
+    const head = await client.getBlockNumber();
+    const logs = await client.getLogs({ address: cfg.contractAddress, fromBlock: BigInt(cfg.deployBlock), toBlock: "latest" });
+    const events = parseEventLogs({ abi, logs }).sort((x,y) => Number(x.blockNumber - y.blockNumber) || x.logIndex - y.logIndex);
+    const blockTimes = {};
+    const uniqBlocks = [...new Set(events.map(e => e.blockNumber.toString()))].slice(-60);
+    await Promise.all(uniqBlocks.map(async bn => { const b = await client.getBlock({ blockNumber: BigInt(bn) }); blockTimes[bn] = Number(b.timestamp); }));
+
+    const count = Number(await client.readContract({ address: cfg.contractAddress, abi, functionName: "bountyCount" }));
+    const bounties = count ? await client.multicall({ contracts: Array.from({length: count}, (_, i) => ({ address: cfg.contractAddress, abi, functionName: "getBounty", args: [BigInt(i)] })) }) : [];
+
+    const byId = {};
+    for (const e of events) { const id = e.args?.id?.toString(); if (id !== undefined) (byId[id] ??= []).push(e); }
+
+    $("#statusbar").innerHTML = `<span class="dot"></span><span>${chain.name} · block ${head}</span><span>contract ${addrLink(cfg.contractAddress)} · <a href="${cfg.explorerBase}/address/${cfg.contractAddress}#code" target="_blank" rel="noopener">verified source</a></span><span>arbitrator ${addrLink(cfg.arbitratorAddress)}</span><span>${events.length} events · refreshed ${new Date().toLocaleTimeString()}</span>`;
+
+    // bounties
+    const tbody = $("#bounties tbody"); tbody.innerHTML = "";
+    $("#bountyCount").textContent = count ? `${count} total` : "";
+    $("#bountiesEmpty").hidden = count > 0;
+    for (let i = count - 1; i >= 0; i--) {
+      const r = bounties[i]; if (r.status !== "success") continue; const b = r.result; const s = b.spec;
+      const evs = byId[String(i)] ?? []; const last = evs[evs.length-1];
+      const tr = document.createElement("tr"); tr.className = "bounty";
+      tr.innerHTML = `<td class="mono">#${i}</td><td><span class="pill s-${STATUS[b.status]}">${STATUS[b.status]}</span></td>
+        <td>${esc(s.domainTag)}<br><span class="muted">${s.taskCount} tasks · reveal ${s.sampleSize} · ${s.runs} run(s)</span></td>
+        <td class="band">${esc(s.weakModel)} ≤ ${pct(s.weakMaxBps)}<br>${esc(s.strongModel)} ≥ ${pct(s.strongMinBps)}<br>null ≤ ${pct(s.nullMaxBps)} · ±${pct(s.toleranceBps)}</td>
+        <td class="mono">${eth(b.reward)}<br><span class="muted">bond ${eth(b.sellerBond)}</span></td>
+        <td>${addrLink(b.buyer)}</td><td>${addrLink(b.seller)}</td>
+        <td>${last ? `${last.eventName} ${txLink(last.transactionHash, "↗")}` : "—"}</td>`;
+      tr.onclick = () => { expanded.has(i) ? expanded.delete(i) : expanded.add(i); render(); };
+      tbody.appendChild(tr);
+      if (expanded.has(i)) {
+        const d = document.createElement("tr"); d.className = "detail";
+        const revealed = evs.filter(e => e.eventName === "SampleRevealed");
+        const lastCommitIdx = evs.map(e=>e.eventName).lastIndexOf("Committed");
+        const current = revealed.filter(e => evs.indexOf(e) > lastCommitIdx);
+        d.innerHTML = `<td colspan="8"><div class="grid2">
+          <div><b>Timeline</b><ul class="timeline">${evs.map(e => `<li><span class="t">${blockTimes[e.blockNumber.toString()] ? new Date(blockTimes[e.blockNumber.toString()]*1000).toLocaleTimeString() : ""}</span>${narrate(e, b)} ${txLink(e.transactionHash, "↗")}</li>`).join("")}</ul></div>
+          <div><b>Revealed sample (current commit)</b>${current.length ? current.map(e => { let t; try { t = JSON.parse(new TextDecoder().decode(hexToBytes(e.args.task))); } catch { return ""; } return `<div class="task"><span class="idx">task ${e.args.index}</span> <span class="muted">${esc(t.family)} · d${t.difficulty}</span><br>${esc(t.prompt)}<br><span class="muted">reference:</span> <span class="ref">${esc(t.reference)}</span> <span class="muted">(${esc(t.grader.type)})</span></div>`; }).join("") : `<div class="empty">nothing revealed yet</div>`}
+          <div class="kv" style="margin-top:12px"><b>task root</b><span class="mono">${b.taskRoot}</span><b>bundle hash</b><span class="mono">${b.bundleCommitment}</span><b>sample block</b><span class="mono">${b.sampleBlock}</span><b>buyer X25519</b><span class="mono">${b.buyerPubKey}</span></div></div>
+        </div></td>`;
+        tbody.appendChild(d);
+      }
+    }
+
+    // reputation
+    const sellers = [...new Set(events.filter(e => e.eventName === "Committed").map(e => e.args.seller))];
+    const buyers = [...new Set(events.filter(e => e.eventName === "BountyCreated").map(e => e.args.buyer))];
+    const [srep, brep] = await Promise.all([
+      sellers.length ? client.multicall({ contracts: sellers.map(a => ({ address: cfg.contractAddress, abi, functionName: "sellerRep", args: [a] })) }) : [],
+      buyers.length ? client.multicall({ contracts: buyers.map(a => ({ address: cfg.contractAddress, abi, functionName: "buyerRep", args: [a] })) }) : [],
+    ]);
+    $("#sellers tbody").innerHTML = sellers.map((a, i) => { const r = srep[i].result ?? []; return `<tr><td>${addrLink(a)}</td>${r.slice(0,8).map(v => `<td class="mono">${v}</td>`).join("")}<td class="mono">${eth(r[8] ?? 0n)}</td></tr>`; }).join("") || `<tr><td colspan="10" class="empty">no sellers yet</td></tr>`;
+    $("#buyers tbody").innerHTML = buyers.map((a, i) => { const r = brep[i].result ?? []; return `<tr><td>${addrLink(a)}</td>${r.map(v => `<td class="mono">${v}</td>`).join("")}</tr>`; }).join("") || `<tr><td colspan="5" class="empty">no buyers yet</td></tr>`;
+
+    // log
+    const log = $("#log"); const atBottom = log.scrollHeight - log.scrollTop - log.clientHeight < 40;
+    log.innerHTML = events.map(e => `<div><span class="muted">${blockTimes[e.blockNumber.toString()] ? new Date(blockTimes[e.blockNumber.toString()]*1000).toLocaleTimeString() : `#${e.blockNumber}`}</span> <span class="who">${e.eventName}</span> ${narrate(e)} ${txLink(e.transactionHash, "↗")}</div>`).join("") || `<div class="empty">no events yet</div>`;
+    if (atBottom) log.scrollTop = log.scrollHeight;
+    lastRender = Date.now();
+    window.__state = { events, bounties };
+  } catch (err) {
+    console.error(err);
+    $("#statusbar").innerHTML = `<span class="dot" style="background:var(--bad);box-shadow:none"></span><span class="bad">RPC error: ${esc(err.shortMessage ?? err.message)}</span>`;
+  }
+}
+function render() { refresh(); }
+refresh();
+setInterval(refresh, 10_000);
+</script>
+</body>
+</html>
