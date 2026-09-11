@@ -7,7 +7,7 @@ Deadline: **Thursday 2026-09-11, 2:00 PM** via the B@B Google Form (link in the 
 - [x] Contracts deployed on Sepolia: EvalBounty `0x6b7f34fa4229aa9545b08c47d187415505c0e7a8`, CentralizedArbitrator `0x5d16caa1e9789a996839aa44a4167b574b887653` (block 11679290), agents funded
 - [x] Source verified on Etherscan, Blockscout and Sourcify (`./scripts/verify-sepolia.sh`)
 - [x] Keys entered with `./scripts/set-keys.sh`; demo runs on OpenAI `gpt-4.1-nano-2025-04-14` vs `gpt-5-nano-2025-08-07`
-- [ ] `pnpm --filter agents demo` on Sepolia (all four stories) so the dashboard has real history
+- [x] `pnpm --filter agents demo` on Sepolia, all four stories passed with real models (bounties #1 happy → Settled, #2 junk rejected then refilled → Settled, #3 easy → ClaimsFailed → Refunded, #4 garbage → BadDelivery → Refunded). Bounty #0 is a bonus story: a buyer disputed with a key that did not bind to the bounty, and the arbiter ruled for the seller, so the dashboard shows "Disputed → seller wins → Settled" there. Re-run `pnpm --filter agents demo --story=happy` live while recording if you want fresh transactions on camera (about 6 minutes).
 - [ ] **Vercel** (your login is required, one time):
   ```bash
   npx vercel login
