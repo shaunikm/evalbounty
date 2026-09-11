@@ -17,36 +17,55 @@ Deadline: **Thursday 2026-09-11, 2:00 PM** via the B@B Google Form (link in the 
 
 ## Recording plan (≤ 5 min; the brief says unpolished is fine, "just show everything")
 
-The product is agents acting on a chain, so the video shows the agents acting and the chain confirming it. Nothing
-needs to be pre-recorded or faked; one live run plus the history already on-chain covers the "complete experience".
+One live happy-path trade (about 3.5 minutes of wall time, two ~50 s model-measurement waits inside it) plus the
+failure cases that are already on-chain, narrated over the dashboard during the second wait. Nothing is faked.
 
-**Before you press record**
+**Prep, 15 minutes before (terminal at the repo root)**
 
-1. Wallets are funded for many retakes. If they ever run low, https://sepolia-faucet.pk910.de pays any address without a mainnet-balance check; send to the buyer `0x017082D0C34ca98ff11F6D779a15363f8592aa4B`.
-2. Open three things side by side: a terminal in `agents/` with a large font, https://evalbounty.vercel.app, and one Etherscan tab
-   on the contract's Events page: https://sepolia.etherscan.io/address/0x6b7f34fa4229aa9545b08c47d187415505c0e7a8#events
-3. macOS: Cmd+Shift+5 → record the screen; talk over it. Upload to YouTube as *Unlisted*, paste the link into README.md.
+```bash
+git pull --ff-only
+```
 
-**The take** (times are approximate; cut dead air in editing or just let it run)
+Rehearse once; this also proves the RPC, the models and the wallets are healthy and leaves a fresh settled bounty:
+
+```bash
+pnpm --filter agents demo -- --story=happy
+```
+
+Then: `clear`; terminal font 18–20 pt, window as wide as the screen (log lines are long). Browser tabs, in this order:
+1. https://evalbounty.vercel.app (leave it on the top of the page)
+2. https://sepolia.etherscan.io/address/0x6b7f34fa4229aa9545b08c47d187415505c0e7a8#events
+3. https://github.com/shaunikm/evalbounty (README; make the repo public first)
+
+Do **not** run `junk`, `easy`, `bad` or `committee` live: they take 4.5–10 minutes. They are on-chain as #10, #7/#8 and #11–#13.
+
+**The take** (Cmd+Shift+5 → Record Entire Screen, microphone on; ≈ 410 spoken words ≈ 4:30)
 
 | t | Do | Say |
 |---|---|---|
-| 0:00 | Dashboard, top of page | "EvalBounty is a marketplace where AI agents buy and sell evaluation tasks for AI models. The buyer can't inspect before paying because a benchmark loses its value the moment it's seen. Everything you'll see is a real transaction on Ethereum Sepolia; this page only reads the chain." |
-| 0:25 | Terminal: `pnpm --filter agents demo -- --story=happy` | "Three autonomous agents: a buyer, a seller and an arbiter. I'm starting a live trade." |
-| 0:35 | Log: `posting bounty… band weak(gpt-4.1-nano) ≤ 35% strong(gpt-5-nano) ≥ 65%`, then `createBounty` tx link; dashboard row appears **Open** | "The buyer defines value up front: 30 tasks, reveal 4, a weak model must score under 35%, a strong reasoning model over 65%. That's checkable by anyone holding the bundle. The reward is now in escrow in the contract." |
-| 1:00 | Log: `measuring 30/30 tasks…` then `measured difficulty 3: weak 16.7% strong 91.1%` and `commit` tx | "The seller assembles 30 real items from BIG-Bench Hard and GSM8K, measures them on both pinned models, and commits a Merkle root plus a bond of half the reward. It hasn't shown the buyer anything yet." |
-| 1:30 | Log: `blockhash(N) = 0x… picked tasks [..] — I had no say in this`, `revealSample` tx; dashboard: click the row → Revealed sample with source ids | "The next block's hash decides which four tasks get revealed. The seller committed before that hash existed, so it can't cherry-pick. Here they are on the dashboard, each with its provenance." |
-| 2:00 | Log: buyer `on-chain record: …`, `strong model solved 4/4`, `approving` | "The buyer first reads the seller's on-chain reputation, then checks the sample is well-posed and that the strong model can actually solve it. Approve." |
-| 2:20 | Log: `encrypting … bundle to buyer key`, `deliver` tx; then buyer `decrypted…`, `keccak matches the commitment`, `Merkle root … matches`, `measuring 30/30`, `measured weak 18.9% strong 98.9%`, `all three claims hold → accepting` | "Delivery is encrypted to a key only this buyer holds, posted in the event log. The buyer decrypts, proves it's exactly the committed bundle, reruns all 30 tasks on both models, and the claims hold. It accepts; the contract pays the seller minus a 2% fee." |
-| 3:05 | Dashboard: row turns **Settled**; Reputation tab shows counters move | "Settled. Reputation counters update on-chain." |
-| 3:15 | Dashboard: click bounty **#10** → timeline | "Now the failure cases, already on-chain. Here a junk seller with two prior rejections committed; the buyer rejected it on its record alone, without spending a model call, and the honest seller refilled the bounty." |
-| 3:40 | Dashboard: click bounty **#7** → timeline (ClaimsFailed → Ruling → Refunded) | "Here a seller shipped real but too-easy tasks and lied about the numbers. The buyer's rerun measured the weak model at 61% against a claimed 30%, disputed, and the arbiter reran privately and ruled for the buyer. The seller's bond was slashed." |
-| 4:05 | Dashboard: click bounty **#8** (BadDelivery) | "And a plain bad delivery: garbage bytes instead of the bundle. Provable by anyone, ruled for the buyer." |
-| 4:15 | Dashboard: click bounty **#11** (Disputed → Ruling by 0x522A… → Refunded); #12 and #13 show the same through the committee for bad deliveries | "Since then I replaced the single arbiter with a staked committee. On this bounty nobody picked the judges: the next block's hash drew three staked jurors, the buyer handed them the key, each reran the tasks and voted blind, and the tally ruled unanimously for the buyer. A juror who votes against the reproducible answer loses stake." |
-| 4:35 | Etherscan Events tab, then Contract tab (green check) | "Every step is a transaction on this contract, source verified." |
-| 4:45 | README, limitation paragraph | "The limitation, out loud: the contract enforces delivery and whether the listed difficulty claims hold. It does not prove tasks are useful beyond the sample or that they stay secret after sale. Thanks." |
+| 0:00 | Dashboard, top of page | "EvalBounty is a marketplace where AI agents buy and sell evaluation tasks for AI models. The buyer can't look before paying, because a benchmark loses its value the moment it's seen. Everything here is a live contract on Ethereum Sepolia; this page only reads the chain." |
+| 0:20 | Terminal: `pnpm --filter agents demo -- --story=happy` | "Three autonomous agents: a buyer, a seller and an arbitrator. I'm starting a live trade now." |
+| 0:30 | Log: `posting bounty… band weak(gpt-4.1-nano) ≤ 35% strong(gpt-5-nano) ≥ 65%`, `createBounty` tx; dashboard row appears **Open** | "The buyer declares value up front: thirty tasks, reveal four, a weak model must score under 35 percent, a strong reasoning model above 65. Anyone holding the bundle can check that. The reward goes into escrow in the contract." |
+| 0:50 | Log: seller `measuring 30/30 tasks…` (≈ 50 s) | "The seller assembles thirty real items from BIG-Bench Hard and GSM8K and measures them on both pinned models before committing. Nobody has seen anything yet. Why this vertical: labs need fresh, uncontaminated tests, and eval builders need a way to sell them without showing them. That is exactly the black-box problem." |
+| 1:10 | Log: `commit` tx | "It commits a Merkle root of the tasks, a hash of the whole bundle, and posts a bond of half the reward." |
+| 1:30 | Log: `blockhash(N) = 0x… picked tasks […] — I had no say in this`, `revealSample` tx; dashboard: click the row → revealed sample | "The hash of the next block picks which four tasks get revealed. The seller committed before that hash existed, so it cannot cherry-pick. Here they are on the dashboard, each with its provenance." |
+| 2:00 | Log: buyer `on-chain record: …`, `strong model solved 4/4`, `approveSample` tx | "The buyer checks the seller's on-chain reputation first, then that the sample is well-posed and the strong model actually solves it. Approve." |
+| 2:20 | Log: `encrypting … to buyer key`, `deliver` tx | "Delivery is the bundle encrypted to a key only this buyer has, posted in the event log." |
+| 2:30 | Buyer `measuring 30/30…` (≈ 50 s) → dashboard: click **#10**, then **#7**, then **#11** | "While the buyer reruns all thirty tasks, the failure cases, already on chain. Bounty 10: a junk seller with two prior rejections; the buyer rejected it on record alone, without a model call. Bounty 7: a seller shipped too-easy tasks and lied about the numbers; the buyer's rerun caught it, the arbiter reran privately and the bond was slashed. Bounty 11: the same fraud, judged by a staked committee: the next block's hash drew three jurors, the buyer handed them the key, they voted blind, unanimous for the buyer." |
+| 3:20 | Terminal: `decrypted…`, `keccak matches`, `Merkle root matches`, `measured weak … strong …`, `all three claims hold → accepting`, `accept` tx | "Back live: the buyer decrypted, proved it's exactly the committed bundle, reran everything, and the claims hold. It accepts; the contract pays the seller minus a two percent fee." |
+| 3:40 | Dashboard: row turns **Settled**; Reputation tab | "Settled. Reputation counters update on chain." |
+| 3:55 | Etherscan tab: Events, then Contract (green check) | "Every step is a transaction on this verified contract." |
+| 4:10 | README, limitation paragraph | "The limitation, out loud: the contract enforces delivery and whether the listed claims hold. It does not prove the tasks are useful beyond the sample, or that they stay secret after sale. That trust still rests on reputation. Thanks." |
 
-If the live run hits an RPC hiccup, keep recording: the dashboard history (#5, #6, #9) shows the same happy path already settled, and the narration works over it.
+**If the live run stalls** (RPC hiccup, a slow block): keep recording and talking over the dashboard; #5, #6 and #9 are the
+same happy path already settled. If it recovers, cut back to the terminal. If the recording runs past 5:00, trim the two
+measurement waits in QuickTime (Edit → Trim) rather than re-recording.
+
+**After**: upload to YouTube as *Unlisted* (or Drive, anyone with the link), paste the URL over `<VIDEO_URL>` in README.md,
+commit and push, submit the form.
+
+If the bundle default moves to 100 tasks, each measurement wait grows to ~70–80 s and the live take runs ~4:15: start the
+command about 30 s before pressing record, or trim the waits.
 
 ## Interview answers to have ready
 
