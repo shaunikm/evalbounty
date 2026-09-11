@@ -204,26 +204,33 @@ function stageCounts() {
 // ---------- tiny SVG helpers ----------
 function sparkline(series, color) {
   const w = 160, h = 40, pad = 2;
-  const max = Math.max(1, ...series), n = series.length;
+  const max = Math.max(...series) || 1, n = series.length;
   const x = (i) => pad + (i * (w - 2 * pad)) / Math.max(1, n - 1), y = (v) => h - pad - (v / max) * (h - 2 * pad);
   const pts = series.map((v, i) => `${x(i).toFixed(1)},${y(v).toFixed(1)}`);
   const line = `M${pts.join("L")}`;
   const area = `${line}L${x(n - 1).toFixed(1)},${h}L${x(0).toFixed(1)},${h}Z`;
   const gid = `g${Math.random().toString(36).slice(2, 8)}`;
-  return `<svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" aria-hidden="true"><defs><linearGradient id="${gid}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${color}" stop-opacity=".28"/><stop offset="1" stop-color="${color}" stop-opacity="0"/></linearGradient></defs><path class="area" d="${area}" fill="url(#${gid})"/><path class="line" pathLength="1" d="${line}" fill="none" stroke="${color}" stroke-width="1.5" vector-effect="non-scaling-stroke" stroke-linejoin="round"/><circle cx="${x(n - 1).toFixed(1)}" cy="${y(series[n - 1]).toFixed(1)}" r="2.5" fill="${color}"/></svg>`;
+  return `<svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" aria-hidden="true"><defs><linearGradient id="${gid}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${color}" stop-opacity=".28"/><stop offset="1" stop-color="${color}" stop-opacity="0"/></linearGradient></defs><path class="area" d="${area}" fill="url(#${gid})"/><path class="line" d="${line}" fill="none" stroke="${color}" stroke-width="1.5" vector-effect="non-scaling-stroke" stroke-linejoin="round"/><circle cx="${x(n - 1).toFixed(1)}" cy="${y(series[n - 1]).toFixed(1)}" r="2.5" fill="${color}"/></svg>`;
+}
+// Sparklines: 24 equal buckets from the first event to now, so the line shows the shape of the
+// history rather than the chart's padded range.
+function sparkSpan() {
+  const now = Math.floor(Date.now() / 1000);
+  const times = S.events.map(tsOf).filter((t) => t !== undefined);
+  const first = times.length ? Math.min(...times) : now - 3600;
+  const n = 24, step = Math.max(60, Math.ceil((now - first) / (n - 1)));
+  return { start: first, step, n };
 }
 function cumulative(pick) {
-  // 24 buckets across the full history; value = cumulative sum of pick(event) up to bucket end
-  const b = bucketize("all"), n = Math.min(24, b.length), start = b[b.length - n].t, step = b[0].step;
+  const { start, step, n } = sparkSpan();
   const out = new Array(n).fill(0);
-  let base = 0;
-  for (const e of S.events) { const t = tsOf(e); const v = pick(e); if (!v) continue; if (t < start) { base += v; continue; } out[Math.min(n - 1, Math.floor((t - start) / step))] += v; }
-  let acc = base; return out.map((v) => (acc += v));
+  for (const e of S.events) { const t = tsOf(e); const v = pick(e); if (!v || t === undefined) continue; out[Math.min(n - 1, Math.max(0, Math.floor((t - start) / step)))] += v; }
+  let acc = 0; return out.map((v) => (acc += v));
 }
 function perBucket(pick) {
-  const b = bucketize("all"), n = Math.min(24, b.length), start = b[b.length - n].t, step = b[0].step;
+  const { start, step, n } = sparkSpan();
   const out = new Array(n).fill(0);
-  for (const e of S.events) { const t = tsOf(e); const v = pick(e); if (!v || t < start) continue; out[Math.min(n - 1, Math.floor((t - start) / step))] += v; }
+  for (const e of S.events) { const t = tsOf(e); const v = pick(e); if (!v || t === undefined) continue; out[Math.min(n - 1, Math.max(0, Math.floor((t - start) / step)))] += v; }
   return out;
 }
 
