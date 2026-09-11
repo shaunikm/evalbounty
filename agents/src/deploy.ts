@@ -20,7 +20,8 @@ export const WINDOWS = {
   rule: BigInt(process.env.RULE_WINDOW ?? 60n * MIN),
 };
 export const ARBITRATION_PRICE = parseEther("0.0002");
-const META_EVIDENCE_URI = "https://github.com/shaunikm/technical-interview/blob/main/dashboard/meta-evidence.json";
+// ERC-1497 meta-evidence document for disputes; override per deployment with META_EVIDENCE_URI.
+const META_EVIDENCE_URI = process.env.META_EVIDENCE_URI ?? "https://github.com/shaunikm/technical-interview/blob/main/dashboard/meta-evidence.json";
 
 // Enough for the four demo stories at ~1-2 gwei with margin; funded in this priority order.
 // Real-item bundles are ~23 KB, so a delivery costs ~1M gas; the seller needs the most headroom.
