@@ -9,11 +9,13 @@ import { measureBundle } from "../src/lib/verify.js";
 
 const args = process.argv.slice(2).filter((a) => a !== "--");
 const n = Number(args[0] ?? 12);
+const only = args[1] ? new Set(args[1].split(",")) : undefined;
 const provider = await getProvider();
 const m = defaultModels(providerName());
 console.log(`provider ${provider.name}: weak=${m.weak} strong=${m.strong}, ${n} items per family`);
 const rows: { family: string; weak: number; strong: number; secs: number }[] = [];
 for (const f of families()) {
+  if (only && !only.has(f)) continue;
   const tasks = sampleTasks({ seed: `cal-${f}`, count: n, difficulty: 3, families: [f] });
   const bundle: Bundle = { version: 1, salt: `0x${"00".repeat(32)}`, domainTag: "benchmark-reasoning", runParams: DEFAULT_RUN_PARAMS, tasks, sellerMeasured: { weak: 0, strong: 0, null: 0 } };
   const t0 = Date.now();

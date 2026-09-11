@@ -1,5 +1,5 @@
 {
-  "fetchedAt": "2026-09-11T04:34:46.504Z",
+  "fetchedAt": "2026-09-11T04:39:10.294Z",
   "sources": [
     {
       "name": "bbh/boolean_expressions",
@@ -89,6 +89,48 @@
       "name": "bbh/formal_fallacies",
       "url": "https://raw.githubusercontent.com/suzgunmirac/BIG-Bench-Hard/main/bbh/formal_fallacies.json",
       "sha256": "4c1adb664821157faade1d4153685403afcc02648f3c180a608a18f17f589629",
+      "items": 250,
+      "license": "MIT (suzgunmirac/BIG-Bench-Hard)"
+    },
+    {
+      "name": "bbh/tracking_shuffled_objects_five_objects",
+      "url": "https://raw.githubusercontent.com/suzgunmirac/BIG-Bench-Hard/main/bbh/tracking_shuffled_objects_five_objects.json",
+      "sha256": "2063a46a4fb484236ed4310523606543a3e1dd4a4dc34eda65d407910ece25a5",
+      "items": 250,
+      "license": "MIT (suzgunmirac/BIG-Bench-Hard)"
+    },
+    {
+      "name": "bbh/tracking_shuffled_objects_seven_objects",
+      "url": "https://raw.githubusercontent.com/suzgunmirac/BIG-Bench-Hard/main/bbh/tracking_shuffled_objects_seven_objects.json",
+      "sha256": "b59fd05b850c37cf57cb514ae1e6975c00b1638ade2291722056b2af3c54084d",
+      "items": 250,
+      "license": "MIT (suzgunmirac/BIG-Bench-Hard)"
+    },
+    {
+      "name": "bbh/logical_deduction_five_objects",
+      "url": "https://raw.githubusercontent.com/suzgunmirac/BIG-Bench-Hard/main/bbh/logical_deduction_five_objects.json",
+      "sha256": "d2df31394b903b7f0e085d42a69572a092987856eac076799017d70ef266fa8f",
+      "items": 250,
+      "license": "MIT (suzgunmirac/BIG-Bench-Hard)"
+    },
+    {
+      "name": "bbh/logical_deduction_seven_objects",
+      "url": "https://raw.githubusercontent.com/suzgunmirac/BIG-Bench-Hard/main/bbh/logical_deduction_seven_objects.json",
+      "sha256": "2896c7e3482eea318dd37bcc370d24ec3cc91e8374c1784287b5dbd38a529e33",
+      "items": 250,
+      "license": "MIT (suzgunmirac/BIG-Bench-Hard)"
+    },
+    {
+      "name": "bbh/dyck_languages",
+      "url": "https://raw.githubusercontent.com/suzgunmirac/BIG-Bench-Hard/main/bbh/dyck_languages.json",
+      "sha256": "3f9badedf15c2be1ce53d94fdf016299bb30ba231ef087ab9f51a7ed6d0bdc25",
+      "items": 250,
+      "license": "MIT (suzgunmirac/BIG-Bench-Hard)"
+    },
+    {
+      "name": "bbh/geometric_shapes",
+      "url": "https://raw.githubusercontent.com/suzgunmirac/BIG-Bench-Hard/main/bbh/geometric_shapes.json",
+      "sha256": "07be68a124420caa2ebc0b2c858ad79fc55c5c8806170e496e1e17ebfb11f31c",
       "items": 250,
       "license": "MIT (suzgunmirac/BIG-Bench-Hard)"
     },

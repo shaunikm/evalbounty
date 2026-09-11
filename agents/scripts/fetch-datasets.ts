@@ -39,6 +39,12 @@ const BBH_TASKS = [
   "web_of_lies",
   "reasoning_about_colored_objects",
   "formal_fallacies",
+  "tracking_shuffled_objects_five_objects",
+  "tracking_shuffled_objects_seven_objects",
+  "logical_deduction_five_objects",
+  "logical_deduction_seven_objects",
+  "dyck_languages",
+  "geometric_shapes",
 ];
 const GSM8K_URL = "https://raw.githubusercontent.com/openai/grade-school-math/master/grade_school_math/data/test.jsonl";
 
@@ -48,6 +54,7 @@ function instruction(kind: Kind, family: string): string {
   if (kind === "choice") return "Reply with only the letter of the correct option in parentheses, e.g. (B).";
   if (kind === "numeric") return "Reply with only the final integer.";
   if (family === "word_sorting") return "Reply with only the sorted words separated by single spaces.";
+  if (family === "dyck_languages") return "Reply with only the closing brackets needed, separated by single spaces.";
   if (family === "boolean_expressions") return "Reply with only True or False.";
   if (family === "formal_fallacies") return "Reply with only valid or invalid.";
   if (["web_of_lies", "sports_understanding", "navigate"].includes(family)) return "Reply with only Yes or No.";
