@@ -14,22 +14,37 @@ Deadline: **Thursday 2026-09-11, 2:00 PM** via the B@B Google Form (link in the 
 - [ ] Record the video (≤ 5 min), upload (YouTube unlisted / Drive), paste URL into README.md (`<VIDEO_URL>`)
 - [ ] Submit: repo URL, dashboard URL, contract address + Etherscan link, video URL
 
-## Video shot list (target 4:30)
+## Recording plan (≤ 5 min; the brief says unpolished is fine, "just show everything")
 
-Run `pnpm --filter agents demo` in one terminal and keep the dashboard open in a browser; narrate over it.
+The product is agents acting on a chain, so the video shows the agents acting and the chain confirming it. Nothing
+needs to be pre-recorded or faked; one live run plus the history already on-chain covers the "complete experience".
 
-| t | Show | Say |
+**Before you press record**
+
+1. Top up the buyer and seller wallets (`agents/state/addresses.json`) from a faucet if you want a retake; today they hold exactly one live run.
+2. Open three things side by side: a terminal in `agents/` with a large font, https://evalbounty.vercel.app, and one Etherscan tab
+   on the contract's Events page: https://sepolia.etherscan.io/address/0x6b7f34fa4229aa9545b08c47d187415505c0e7a8#events
+3. macOS: Cmd+Shift+5 → record the screen; talk over it. Upload to YouTube as *Unlisted*, paste the link into README.md.
+
+**The take** (times are approximate; cut dead air in editing or just let it run)
+
+| t | Do | Say |
 |---|---|---|
-| 0:00 | Dashboard hero | "EvalBounty is a market for fresh AI evaluation tasks. The buyer can't look before paying because looking is contamination, so the market has to enforce value without disclosure." |
-| 0:30 | Terminal: `createBounty` tx, dashboard row appears Open | "The buyer agent declares value up front: 30 tasks, reveal 4, a weak model must score ≤ 35 %, a strong one ≥ 65 %, a trivial policy ≤ 5 %, all on pinned model ids with committed run params. That's checkable by anyone with the bundle." |
-| 1:00 | Seller log: measure → tune → commit | "The seller assembles 30 real evaluation items, here from BIG-Bench Hard and GSM8K, and measures them on the two pinned models: gpt-4.1-nano without reasoning lands around 30 %, the reasoning gpt-5-nano above 90 %. That's inside the band, so it commits a Merkle root plus a bond of half the reward. If the first mix were too easy it would swap in harder subtasks and re-measure." |
-| 1:30 | Seller log: `blockhash(n) picked tasks [...]`; dashboard: revealed sample with source ids like `bbh/date_understanding/17` | "The next block's hash picks which 4 tasks are shown. The seller committed before that hash existed, so it can't cherry-pick. Each revealed task carries its provenance. A 30 %-junk bundle survives this 24 % of the time." |
-| 2:00 | Buyer log: objective checks, `strong model solved 4/4`, approve | "The buyer checks the sample is well-posed and that the strong model can actually solve some of it, then approves." |
-| 2:20 | Seller: encrypt + deliver; Buyer: decrypt, keccak matches, root matches, rerun, accept; dashboard: Settled, reputation updates | "Delivery is encrypted to a per-bounty key and lives in the event log. The buyer decrypts, verifies it is exactly the committed bundle, re-runs all three claims, and accepts. Settlement is a pull-payment with a 2 % fee." |
-| 3:05 | Story 2: junk seller rejected, bounty reopens, honest seller fills it | "A junk seller shipping unanswerable prompts: the random sample exposes it, the buyer walks away, the seller gets a reputation mark, the bounty reopens. The next time that address commits, the buyer reads its record first and turns it away without spending a single model call." |
-| 3:40 | Story 3: easy seller → ClaimsFailed → arbiter reruns → Refunded, bond slashed | "A subtler cheat: real, well-posed items, but from the subtasks the weak model already solves (boolean expressions, formal fallacies), with fake numbers attached. The buyer's rerun catches it; it disputes through an ERC-792 arbitrator that reruns privately and rules; the seller's bond is slashed." |
-| 4:10 | Story 4 (optional): garbage ciphertext → BadDelivery → Refunded | "And a plain bad delivery is provable by anyone." |
-| 4:30 | Etherscan verified source; README limitation | "Contract and arbitrator are verified on Sepolia. The limitation, out loud: the contract enforces delivery and the listed claims, not usefulness beyond the sample or secrecy after sale." |
+| 0:00 | Dashboard, top of page | "EvalBounty is a marketplace where AI agents buy and sell evaluation tasks for AI models. The buyer can't inspect before paying because a benchmark loses its value the moment it's seen. Everything you'll see is a real transaction on Ethereum Sepolia; this page only reads the chain." |
+| 0:25 | Terminal: `pnpm --filter agents demo -- --story=happy` | "Three autonomous agents: a buyer, a seller and an arbiter. I'm starting a live trade." |
+| 0:35 | Log: `posting bounty… band weak(gpt-4.1-nano) ≤ 35% strong(gpt-5-nano) ≥ 65%`, then `createBounty` tx link; dashboard row appears **Open** | "The buyer defines value up front: 30 tasks, reveal 4, a weak model must score under 35%, a strong reasoning model over 65%. That's checkable by anyone holding the bundle. The reward is now in escrow in the contract." |
+| 1:00 | Log: `measuring 30/30 tasks…` then `measured difficulty 3: weak 16.7% strong 91.1%` and `commit` tx | "The seller assembles 30 real items from BIG-Bench Hard and GSM8K, measures them on both pinned models, and commits a Merkle root plus a bond of half the reward. It hasn't shown the buyer anything yet." |
+| 1:30 | Log: `blockhash(N) = 0x… picked tasks [..] — I had no say in this`, `revealSample` tx; dashboard: click the row → Revealed sample with source ids | "The next block's hash decides which four tasks get revealed. The seller committed before that hash existed, so it can't cherry-pick. Here they are on the dashboard, each with its provenance." |
+| 2:00 | Log: buyer `on-chain record: …`, `strong model solved 4/4`, `approving` | "The buyer first reads the seller's on-chain reputation, then checks the sample is well-posed and that the strong model can actually solve it. Approve." |
+| 2:20 | Log: `encrypting … bundle to buyer key`, `deliver` tx; then buyer `decrypted…`, `keccak matches the commitment`, `Merkle root … matches`, `measuring 30/30`, `measured weak 18.9% strong 98.9%`, `all three claims hold → accepting` | "Delivery is encrypted to a key only this buyer holds, posted in the event log. The buyer decrypts, proves it's exactly the committed bundle, reruns all 30 tasks on both models, and the claims hold. It accepts; the contract pays the seller minus a 2% fee." |
+| 3:05 | Dashboard: row turns **Settled**; Reputation tab shows counters move | "Settled. Reputation counters update on-chain." |
+| 3:15 | Dashboard: click bounty **#10** → timeline | "Now the failure cases, already on-chain. Here a junk seller with two prior rejections committed; the buyer rejected it on its record alone, without spending a model call, and the honest seller refilled the bounty." |
+| 3:40 | Dashboard: click bounty **#7** → timeline (ClaimsFailed → Ruling → Refunded) | "Here a seller shipped real but too-easy tasks and lied about the numbers. The buyer's rerun measured the weak model at 61% against a claimed 30%, disputed, and the arbiter reran privately and ruled for the buyer. The seller's bond was slashed." |
+| 4:05 | Dashboard: click bounty **#8** (BadDelivery) | "And a plain bad delivery: garbage bytes instead of the bundle. Provable by anyone, ruled for the buyer." |
+| 4:20 | Etherscan Events tab, then Contract tab (green check) | "Every step is a transaction on this contract, source verified." |
+| 4:35 | README, limitation paragraph | "The limitation, out loud: the contract enforces delivery and whether the listed difficulty claims hold. It does not prove tasks are useful beyond the sample or that they stay secret after sale. Thanks." |
+
+If the live run hits an RPC hiccup, keep recording: the dashboard history (#5, #6, #9) shows the same happy path already settled, and the narration works over it.
 
 ## Interview answers to have ready
 

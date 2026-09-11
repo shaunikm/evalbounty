@@ -20,7 +20,7 @@ import { generateJunkTasks, generateTasks } from "./lib/generators.js";
 import { buildTaskTree, proofForIndex, sampleIndicesFor, type TaskTree } from "./lib/merkle.js";
 import { canRunModel, getProvider, type ModelProvider } from "./lib/models.js";
 import { loadState, saveState } from "./lib/state.js";
-import { fmt, insideBand, measureBundle, type ClaimSpec, type Transcript } from "./lib/verify.js";
+import { fmt, insideBand, measureBundle, ttyProgress, type ClaimSpec, type Transcript } from "./lib/verify.js";
 import { bountyCreatedEvents } from "./lib/events.js";
 
 type OnChainSpec = {
@@ -114,7 +114,7 @@ export async function prepareBundle(spec: OnChainSpec, provider: ModelProvider, 
       tasks,
       sellerMeasured: { weak: 0, strong: 0, null: 0 },
     };
-    const transcript = await measureBundle(bundle, claim, provider, "0x", {});
+    const transcript = await measureBundle(bundle, claim, provider, "0x", { onProgress: ttyProgress(who) });
     const s = transcript.scores;
     log(who, `measured difficulty ${difficulty}: weak ${fmt(s.weak)} strong ${fmt(s.strong)} null ${fmt(s.null)}  (band: weak<=${fmt(spec.weakMaxBps)} strong>=${fmt(spec.strongMinBps)} null<=${fmt(spec.nullMaxBps)})`);
 

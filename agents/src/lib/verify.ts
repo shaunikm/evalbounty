@@ -53,6 +53,14 @@ export interface MeasureOptions {
   concurrency?: number;
 }
 
+/** Progress callback that draws one updating terminal line (the video shows the work happening). */
+export function ttyProgress(label: string): (done: number, total: number) => void {
+  return (done, total) => {
+    if (!process.stdout.isTTY) return;
+    process.stdout.write(`\r         [${label.padEnd(7)}] measuring ${done}/${total} tasks x 2 models…${done === total ? "\n" : ""}`);
+  };
+}
+
 const toBps = (x: number) => Math.round(x * 10_000);
 
 async function scoreTask(provider: ModelProvider, modelId: string, task: Task, bundle: Bundle, runs: number) {

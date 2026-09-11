@@ -17,7 +17,7 @@ import { deliveredCiphertext, disputedEvents, latestDispute } from "./lib/events
 import { buildTaskTree } from "./lib/merkle.js";
 import { getProvider, type ModelProvider } from "./lib/models.js";
 import { legacyArbiterKeys, loadOrCreateArbiterKeys } from "./deploy.js";
-import { claimsHold, fmt, measureBundle, transcriptHash } from "./lib/verify.js";
+import { claimsHold, fmt, measureBundle, transcriptHash, ttyProgress } from "./lib/verify.js";
 import { toClaimSpec, withdrawIfAny } from "./seller.js";
 
 export interface Decision {
@@ -98,7 +98,7 @@ export async function arbitrate(id: bigint, provider: ModelProvider, arbiterKp: 
   if (runParamsHash(bundle.runParams) !== b.spec.runParamsHash) return forBuyer("run params differ from the pinned hash");
   const claim = toClaimSpec(b.spec);
   log(who, `re-running ${claim.weakModel} / ${claim.strongModel} x ${claim.runs} on ${bundle.tasks.length} tasks with the committed run params…`);
-  const t = await measureBundle(bundle, claim, provider, commitment);
+  const t = await measureBundle(bundle, claim, provider, commitment, { onProgress: ttyProgress(who) });
   const s = t.scores;
   const v = claimsHold(s, claim);
   const th = transcriptHash(t);

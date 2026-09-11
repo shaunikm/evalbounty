@@ -16,7 +16,7 @@ import { bountyCreatedEvents, deliveredCiphertext, revealedTasks, type Revealed 
 import { buildTaskTree } from "./lib/merkle.js";
 import { defaultModels, getProvider, providerName, type ModelProvider } from "./lib/models.js";
 import { loadState, saveState } from "./lib/state.js";
-import { claimsHold, fmt, measureBundle, transcriptHash, type Transcript } from "./lib/verify.js";
+import { claimsHold, fmt, measureBundle, transcriptHash, ttyProgress, type Transcript } from "./lib/verify.js";
 import { toClaimSpec, withdrawIfAny } from "./seller.js";
 
 export interface BuyerConfig {
@@ -239,7 +239,7 @@ export async function verifyDelivery(id: bigint, ciphertext: Uint8Array, kp: Key
 
   const claim = toClaimSpec(b.spec);
   log(who, `re-running claims: ${claim.weakModel} and ${claim.strongModel}, ${claim.runs} run(s) x ${bundle.tasks.length} tasks…`);
-  const transcript = await measureBundle(bundle, claim, provider, commitment);
+  const transcript = await measureBundle(bundle, claim, provider, commitment, { onProgress: ttyProgress(who) });
   const s = transcript.scores;
   log(who, `measured weak ${fmt(s.weak)} strong ${fmt(s.strong)} null ${fmt(s.null)} (seller advertised weak ${fmt(bundle.sellerMeasured.weak)} strong ${fmt(bundle.sellerMeasured.strong)}); SE weak ±${fmt(transcript.standardErrorBps.weak)}`);
   const v = claimsHold(s, claim);
