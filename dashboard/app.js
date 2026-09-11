@@ -99,7 +99,7 @@ function narrate(ev) {
     case "Delivered": return `#${a.id}: ${fmtInt((a.ciphertext.length - 2) / 2)}-byte ciphertext delivered (hash ${short(a.ciphertextHash)}). Buyer has until ${fmtTime(a.verifyBy)} to accept or dispute.`;
     case "Accepted": return `Buyer accepted #${a.id}.`;
     case "Disputed": return `Buyer disputed #${a.id} (${a.kind === 0 ? "BadDelivery" : "ClaimsFailed"}), arbitration dispute ${a.disputeId}. Arbiter must rule by ${fmtTime(a.ruleBy)}.`;
-    case "Ruling": return `Arbitrator ruled dispute ${a._disputeID}: ${["refused → split", "seller wins", "buyer wins"][Number(a._ruling)] ?? a._ruling}.`;
+    case "Ruling": return `Arbitrator ${short(a._arbitrator)} ruled dispute ${a._disputeID}: ${["refused → split", "seller wins", "buyer wins"][Number(a._ruling)] ?? a._ruling}.`;
     case "Settled": return `#${a.id} settled: seller ${short(a.seller)} receives ${eth(a.sellerPayout)}, treasury fee ${eth(a.fee)}.`;
     case "Refunded": return `#${a.id} refunded: buyer ${short(a.buyer)} receives ${eth(a.buyerPayout)}.`;
     case "Split": return `#${a.id} split: buyer ${eth(a.buyerPayout)}, seller ${eth(a.sellerPayout)}.`;
@@ -211,6 +211,13 @@ async function refresh() {
     const bounties = (await readMany(Array.from({ length: count }, (_, i) => ({ address: cfg.contractAddress, abi, functionName: "getBounty", args: [BigInt(i)] })))).map((r) => (r.status === "success" ? r.result : null));
     const byId = {};
     for (const e of events) { const id = e.args?.id?.toString(); if (id !== undefined) (byId[id] ??= []).push(e); }
+    // ERC-792 Ruling names only (arbitrator, its dispute id); attach it to the bounty whose Disputed event
+    // carries that dispute id under that arbitrator (dispute ids restart per arbitrator, so both are needed).
+    for (const e of events.filter((x) => x.eventName === "Ruling")) {
+      const arb = String(e.args._arbitrator).toLowerCase(), did = e.args._disputeID.toString();
+      const i = bounties.findIndex((b, k) => b && String(b.arbitrator).toLowerCase() === arb && (byId[String(k)] ?? []).some((d) => d.eventName === "Disputed" && d.args.disputeId.toString() === did));
+      if (i >= 0) { byId[String(i)].push(e); byId[String(i)].sort((x, y) => Number(x.blockNumber - y.blockNumber) || x.logIndex - y.logIndex); }
+    }
     const sellers = [...new Set(events.filter((e) => e.eventName === "Committed").map((e) => e.args.seller))];
     const buyers = [...new Set(events.filter((e) => e.eventName === "BountyCreated").map((e) => e.args.buyer))];
     const [srep, brep] = await Promise.all([

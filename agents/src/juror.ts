@@ -85,8 +85,19 @@ export async function drawIfNeeded(w: Wallet, committeeAddr: Address, disputeId:
   const head = await publicClient().getBlockNumber({ cacheTime: 0 });
   if (head <= sortitionBlock) return [];
   await tx(who, `drawPanel(dispute ${disputeId}) from blockhash(${sortitionBlock})`, () => cm.write.drawPanel([disputeId]));
-  const after = await cm.read.getDispute([disputeId]);
-  const drawn = [...after[5]] as Address[];
+  // Re-read with patience: load-balanced RPCs may still serve pre-tx state for a moment.
+  let drawn: Address[] = [];
+  for (let i = 0; i < 10 && drawn.length === 0; i++) {
+    const after = await cm.read.getDispute([disputeId]);
+    drawn = [...after[5]] as Address[];
+    if (drawn.length === 0) {
+      if (after[4] !== sortitionBlock) {
+        log(who, `blockhash(${sortitionBlock}) had expired; the panel re-rolls from block ${after[4]}`);
+        return [];
+      }
+      await sleep(env.chainName === "anvil" ? 100 : 1000);
+    }
+  }
   if (drawn.length) log(who, `panel for dispute ${disputeId}: ${drawn.map(short).join(", ")} — chosen by the chain, not by either party`);
   return drawn;
 }

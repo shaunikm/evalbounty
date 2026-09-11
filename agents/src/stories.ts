@@ -72,10 +72,13 @@ async function settleViaCommittee(ctx: Ctx, id: bigint, committeeAddr: Address):
   expect(jurors.length > 0, `bounty #${id} is arbitrated by committee ${committeeAddr}; set JUROR_KEYS so the demo can seat the panel (or switch the market back)`);
   const cm = committee(committeeAddr);
   const b = await evalBounty().read.getBounty([id]);
-  const d0 = await cm.read.getDispute([b.disputeId]);
-  await waitForBlockAfter(d0[4], "juror");
   const payer = await richest(jurors);
-  const panel = await drawIfNeeded(payer, committeeAddr, b.disputeId, "juror");
+  let panel: Address[] = [];
+  for (let attempt = 0; attempt < 3 && panel.length === 0; attempt++) {
+    const d = await cm.read.getDispute([b.disputeId]);
+    await waitForBlockAfter(d[4], "juror"); // sortition block (moves forward if the hash expired and the panel re-rolled)
+    panel = await drawIfNeeded(payer, committeeAddr, b.disputeId, "juror");
+  }
   expect(panel.length === Number(await cm.read.panelSize()), "panel drawn");
   if (b.disputeKind === DisputeKind.ClaimsFailed) expect(await buyerHandoffKeys(ctx.buyer, id), "buyer sealed the bundle key to the panel");
   else log("story", "BadDelivery: the evidence is public, jurors need no key handoff");

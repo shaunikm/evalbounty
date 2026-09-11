@@ -210,6 +210,7 @@ export async function tx(who: string, label: string, send: () => Promise<Hex>, a
       const receipt = await publicClient().waitForTransactionReceipt({ hash, confirmations: 1, timeout: 600_000 });
       if (receipt.status !== "success") throw new Error(`${label} reverted: ${hash}`);
       log(who, `${label}  ${explorer.tx(hash)}`);
+      await catchUp(receipt.blockNumber);
       return receipt;
     } catch (e) {
       lastErr = e;
@@ -221,6 +222,20 @@ export async function tx(who: string, label: string, send: () => Promise<Hex>, a
     }
   }
   throw lastErr;
+}
+
+/**
+ * Public RPC endpoints are load-balanced: a read issued right after waitForTransactionReceipt can land
+ * on a node that has not imported that block yet and return pre-tx state. Wait (bounded) until the
+ * head we observe is at least the receipt's block before returning to the caller.
+ */
+async function catchUp(block: bigint) {
+  const pc = publicClient();
+  const anvil = chain().id === chains.foundry.id;
+  for (let i = 0; i < (anvil ? 5 : 30); i++) {
+    if ((await pc.getBlockNumber({ cacheTime: 0 })) >= block) return;
+    await sleep(anvil ? 50 : 500);
+  }
 }
 
 export async function sleep(ms: number) {
