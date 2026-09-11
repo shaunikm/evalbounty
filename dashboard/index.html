@@ -155,7 +155,7 @@
   .hero::before { background-image: linear-gradient(var(--hero-line) 1px, transparent 1px), linear-gradient(90deg, var(--hero-line) 1px, transparent 1px); mask-image: radial-gradient(ellipse 70% 85% at 50% 0%, #000 20%, transparent 100%); -webkit-mask-image: radial-gradient(ellipse 70% 85% at 50% 0%, #000 20%, transparent 100%); }
   .hero::after { background-image: linear-gradient(var(--gray-500) 1px, transparent 1px), linear-gradient(90deg, var(--gray-500) 1px, transparent 1px); mask-image: radial-gradient(220px circle at var(--hx, -999px) var(--hy, -999px), #000 0%, transparent 70%); -webkit-mask-image: radial-gradient(220px circle at var(--hx, -999px) var(--hy, -999px), #000 0%, transparent 70%); opacity: 0; transition: opacity .35s; }
   .hero:hover::after { opacity: .8; }
-  .hero .wrap { position: relative; padding-top: 44px; padding-bottom: 32px; }
+  .hero .wrap { position: relative; z-index: 1; padding-top: 44px; padding-bottom: 32px; }
   .hero-top { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(320px, .8fr); gap: 40px; align-items: center; }
   .hero .cross { position: absolute; width: 17px; height: 17px; pointer-events: none; }
   .hero .cross::before, .hero .cross::after { content: ""; position: absolute; background: var(--gray-500); }
@@ -180,7 +180,7 @@
   .status-card .head .title { font-weight: 500; }
   /* six-step flow strip, counts come from the chain */
   .flow { list-style: none; margin: 32px 0 0; padding: 0; display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 10px; }
-  .flow li { position: relative; padding: 12px 14px 12px; border-radius: 10px; border: 1px solid var(--gray-a400); background: color-mix(in srgb, var(--bg-100) 72%, transparent); transition: border-color .15s, transform .15s, background .15s, box-shadow .15s; cursor: default; }
+  .flow li { position: relative; padding: 12px 14px 12px; border-radius: 10px; border: 1px solid var(--gray-a400); background: var(--bg-100); transition: border-color .15s, transform .15s, box-shadow .15s; cursor: default; }
   .flow li:hover { border-color: var(--gray-600); transform: translateY(-2px); background: var(--bg-100); box-shadow: 0 8px 24px rgba(0,0,0,.14); }
   .flow li:not(:last-child)::after { content: ""; position: absolute; right: -10px; top: 50%; width: 10px; height: 1px; background: var(--gray-500); }
   .flow .n { display: flex; align-items: center; justify-content: space-between; gap: 6px; font-family: var(--mono); font-size: 11px; color: var(--gray-800); margin-bottom: 6px; white-space: nowrap; overflow: hidden; }
