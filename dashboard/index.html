@@ -33,6 +33,7 @@
     --shadow-sm: 0 0 0 1px var(--gray-a400), 0 1px 2px rgba(0,0,0,.04);
     --shadow-md: 0 0 0 1px var(--gray-a400), 0 8px 24px rgba(0,0,0,.08);
     --hero-line: rgba(0,0,0,.06);
+    --pop-bg: #ffffff;
     --sans: "Geist", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
     --mono: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
   }
@@ -52,6 +53,7 @@
     --shadow-sm: 0 0 0 1px var(--gray-a400);
     --shadow-md: 0 0 0 1px var(--gray-a400), 0 12px 32px rgba(0,0,0,.5);
     --hero-line: rgba(255,255,255,.07);
+    --pop-bg: #161616;
   } }
   :root[data-theme="dark"] {
     color-scheme: dark;
@@ -69,6 +71,7 @@
     --shadow-sm: 0 0 0 1px var(--gray-a400);
     --shadow-md: 0 0 0 1px var(--gray-a400), 0 12px 32px rgba(0,0,0,.5);
     --hero-line: rgba(255,255,255,.07);
+    --pop-bg: #161616;
   }
 
   /* ---------- base ---------- */
@@ -221,10 +224,16 @@
   .tile .spark svg { position: absolute; inset: 0; width: 100%; height: 100%; display: block; overflow: visible; }
   .tile .spark .dot { position: absolute; width: 7px; height: 7px; border-radius: 50%; transform: translate(-50%, -50%); box-shadow: 0 0 0 2px var(--bg-100); }
   .tile .foot { color: var(--gray-800); font-size: 12px; line-height: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .tile .v .hv { display: none; font-family: var(--mono); font-size: 12.5px; letter-spacing: 0; font-weight: 500; color: var(--gray-900); }
-  .tile.scrub .v .hv { display: inline; } .tile.scrub .v .delta { display: none; }
-  .tile .spark .guide { position: absolute; top: -4px; bottom: -4px; width: 1px; background: var(--gray-600); opacity: 0; pointer-events: none; transition: opacity .12s; }
-  .tile .spark .pt { position: absolute; width: 9px; height: 9px; border-radius: 50%; transform: translate(-50%, -50%); box-shadow: 0 0 0 2px var(--bg-100), 0 0 0 5px color-mix(in srgb, currentColor 25%, transparent); opacity: 0; pointer-events: none; transition: opacity .12s; }
+  .tile .v .hv { display: none; }
+  .tile .spark .stip { position: absolute; z-index: 4; pointer-events: none; opacity: 0; transform: translate(-50%, calc(-100% - 12px)); background: var(--pop-bg); border: 1px solid var(--gray-a500); border-radius: 6px; padding: 4px 8px; font-size: 11px; line-height: 14px; white-space: nowrap; color: var(--gray-900); box-shadow: var(--shadow-md); transition: opacity .12s, left .06s linear, top .06s linear, transform .12s; }
+  .tile .spark .stip b { font-family: var(--mono); font-weight: 500; color: var(--gray-1000); }
+  .tile .spark .stip .when { font-family: var(--mono); color: var(--gray-800); margin-left: 6px; }
+  .tile .spark .stip.below { transform: translate(-50%, 12px); }
+  .tile .spark .stip.edge-l { transform: translate(-10px, calc(-100% - 12px)); } .tile .spark .stip.edge-l.below { transform: translate(-10px, 12px); }
+  .tile .spark .stip.edge-r { transform: translate(calc(-100% + 10px), calc(-100% - 12px)); } .tile .spark .stip.edge-r.below { transform: translate(calc(-100% + 10px), 12px); }
+  .tile.scrub .spark .stip { opacity: 1; }
+  .tile .spark .guide { position: absolute; top: -4px; bottom: -4px; width: 1px; background: var(--gray-600); opacity: 0; pointer-events: none; transition: opacity .12s, left .06s linear; }
+  .tile .spark .pt { position: absolute; width: 9px; height: 9px; border-radius: 50%; transform: translate(-50%, -50%); box-shadow: 0 0 0 2px var(--bg-100), 0 0 0 5px color-mix(in srgb, currentColor 25%, transparent); opacity: 0; pointer-events: none; transition: opacity .12s, left .06s linear, top .06s linear; }
   .tile.scrub .spark .guide, .tile.scrub .spark .pt { opacity: 1; } .tile.scrub .spark .dot { opacity: 0; }
   .tile .spark { cursor: crosshair; }
 
@@ -239,21 +248,26 @@
   .chart .axis text, .chart text { fill: var(--gray-800); font-family: var(--mono); font-size: 11px; }
   .chart svg { width: 100%; height: 100%; display: block; }
   .chart .bar { transition: opacity .1s; }
-  .chart .hit { fill: transparent; transition: fill .1s; }
-  .chart .hit:hover { fill: var(--gray-a200); }
   .chart .stack { transition: opacity .12s; }
   .chart[data-active] .stack { opacity: .4; } .chart[data-active] .stack.active { opacity: 1; }
-  .chart .cursor { stroke: var(--gray-600); stroke-dasharray: 3 3; pointer-events: none; }
+  .chart .cursor { stroke: var(--gray-800); stroke-width: 1; stroke-dasharray: 3 3; pointer-events: none; }
   .legend button { display: inline-flex; align-items: center; gap: 6px; padding: 2px 6px; margin: -2px -6px; border-radius: 6px; color: var(--gray-900); transition: background .12s, opacity .12s; }
   .legend button:hover { background: var(--gray-a200); color: var(--gray-1000); }
   .legend button[aria-pressed="false"] { opacity: .45; } .legend button[aria-pressed="false"] i { background: var(--gray-500) !important; }
   .chart .axis text { fill: var(--gray-800); font-family: var(--mono); font-size: 11px; }
   .chart .grid line { stroke: var(--gray-a400); stroke-dasharray: 2 4; }
   .chart .base { stroke: var(--gray-500); }
-  .tooltip { position: absolute; pointer-events: none; z-index: 5; background: var(--gray-1000); color: var(--bg-100); border-radius: 8px; padding: 8px 10px; font-size: 12px; line-height: 16px; min-width: 150px; box-shadow: 0 8px 24px rgba(0,0,0,.25); white-space: nowrap; }
-  .tooltip.flip { transform: translateX(-100%); }
-  .tooltip .t { font-family: var(--mono); opacity: .7; margin-bottom: 4px; }
-  .tooltip .r { display: flex; justify-content: space-between; gap: 14px; } .tooltip .r i { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 6px; vertical-align: -0.5px; }
+  .tooltip { position: absolute; left: 0; top: 0; pointer-events: none; z-index: 5; background: var(--pop-bg); color: var(--gray-1000); border: 1px solid var(--gray-a500); border-radius: 8px; padding: 8px 10px; font-size: 12px; line-height: 16px; min-width: 176px; box-shadow: var(--shadow-md); white-space: nowrap; opacity: 0; transform: translate(var(--tx, 0px), var(--ty, 0px)); transition: transform .07s linear, opacity .12s; }
+  .tooltip.on { opacity: 1; }
+  .tooltip .t { font-family: var(--mono); font-size: 11px; color: var(--gray-900); margin-bottom: 6px; padding-bottom: 6px; border-bottom: 1px solid var(--gray-a200); }
+  .tooltip .r { display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 1px 0; color: var(--gray-900); }
+  .tooltip .r b { font-family: var(--mono); font-weight: 500; color: var(--gray-1000); font-variant-numeric: tabular-nums; }
+  .tooltip .r i { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 7px; vertical-align: -0.5px; }
+  .tooltip .r.total { margin-top: 5px; padding-top: 5px; border-top: 1px solid var(--gray-a200); color: var(--gray-1000); }
+  .chart .band { fill: var(--gray-a200); pointer-events: none; }
+  .chart .overlay { cursor: crosshair; }
+  .xpill { position: absolute; left: 0; bottom: 2px; transform: translateX(calc(var(--x, 0px) - 50%)); font-family: var(--mono); font-size: 11px; line-height: 16px; padding: 1px 7px; border-radius: 4px; background: var(--gray-1000); color: var(--bg-100); pointer-events: none; opacity: 0; transition: transform .07s linear, opacity .12s; white-space: nowrap; }
+  .xpill.on { opacity: 1; }
   .legend { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12px; color: var(--gray-900); }
   .legend span { display: inline-flex; align-items: center; gap: 6px; }
   .legend i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }

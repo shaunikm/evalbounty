@@ -223,7 +223,7 @@ function sparkline(series, color) {
   const line = `M${pts.join("L")}`;
   const area = `${line}L${x(n - 1).toFixed(1)},${h}L${x(0).toFixed(1)},${h}Z`;
   const gid = `g${Math.random().toString(36).slice(2, 8)}`;
-  const dot = `<i class="dot" style="left:${((x(n - 1) / w) * 100).toFixed(2)}%;top:${((y(series[n - 1]) / h) * 100).toFixed(2)}%;background:${color}"></i><i class="guide"></i><i class="pt" style="background:${color};color:${color}"></i>`;
+  const dot = `<i class="dot" style="left:${((x(n - 1) / w) * 100).toFixed(2)}%;top:${((y(series[n - 1]) / h) * 100).toFixed(2)}%;background:${color}"></i><i class="guide"></i><i class="pt" style="background:${color};color:${color}"></i><span class="stip"></span>`;
   sparkline.last = { xs: series.map((_, i) => +((x(i) / w) * 100).toFixed(2)), ys: series.map((v) => +((y(v) / h) * 100).toFixed(2)) };
   return `<svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" aria-hidden="true"><defs><linearGradient id="${gid}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${color}" stop-opacity=".28"/><stop offset="1" stop-color="${color}" stop-opacity="0"/></linearGradient></defs><path class="area" d="${area}" fill="url(#${gid})"/><path class="line" d="${line}" fill="none" stroke="${color}" stroke-width="1.5" vector-effect="non-scaling-stroke" stroke-linejoin="round"/></svg>${dot}`;
 }
@@ -324,7 +324,7 @@ function renderChart(animate = false) {
   const n = buckets.length, slot = iw / n, bw = Math.max(2, Math.min(28, slot - Math.max(2, slot * 0.35)));
   const y = (v) => pt + ih - (v / ticks[ticks.length - 1]) * ih;
   const stroke = "var(--bg-100)";
-  let bars = "", hits = "";
+  let bars = "";
   buckets.forEach((b, i) => {
     const x = pl + i * slot + (slot - bw) / 2;
     let acc = 0;
@@ -339,31 +339,48 @@ function renderChart(animate = false) {
       acc += v;
     }
     if (b.total) bars += `</g>`;
-    hits += `<rect class="hit" data-i="${i}" x="${pl + i * slot}" y="${pt}" width="${slot}" height="${ih}"/>`;
   });
   const labelEvery = Math.ceil(n / Math.max(3, Math.floor(iw / 90)));
   const xl = buckets.map((b, i) => (i % labelEvery === 0 ? `<text x="${pl + i * slot + slot / 2}" y="${H - 8}" text-anchor="middle">${esc(bucketLabel(b))}</text>` : "")).join("");
   const gl = ticks.map((t) => `<line x1="${pl}" x2="${W - pr}" y1="${y(t)}" y2="${y(t)}"/><text x="${pl - 8}" y="${y(t) + 4}" text-anchor="end" class="axis">${t}</text>`).join("");
+  const stepName = buckets[0].step < 3600 ? `${buckets[0].step / 60} minutes` : buckets[0].step === 3600 ? "hour" : buckets[0].step === 86400 ? "day" : "6 hours";
   host.classList.toggle("animate", animate && !reduceMotion);
-  host.innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Contract events per ${buckets[0].step < 3600 ? `${buckets[0].step / 60} minutes` : buckets[0].step === 3600 ? "hour" : buckets[0].step === 86400 ? "day" : "6 hours"}"><g class="grid axis">${gl}</g><line class="base" x1="${pl}" x2="${W - pr}" y1="${pt + ih + .5}" y2="${pt + ih + .5}"/><g>${bars}</g><g class="axis">${xl}</g><line class="cursor" id="chartCursor" x1="0" x2="0" y1="${pt}" y2="${pt + ih}" hidden/><g>${hits}</g></svg><div class="tooltip" id="tip" hidden></div>`;
-  const svgEl = host.querySelector("svg");
-  const clear = () => { $("#tip").hidden = true; host.removeAttribute("data-active"); $("#chartCursor").hidden = true; host.querySelectorAll(".stack.active").forEach((g) => g.classList.remove("active")); };
-  svgEl.addEventListener("mousemove", (ev) => {
-    const t = ev.target.closest(".hit"); const tip = $("#tip"); if (!t) { clear(); return; }
-    const b = buckets[+t.dataset.i];
-    host.dataset.active = t.dataset.i;
-    host.querySelectorAll(".stack.active").forEach((g) => g.classList.remove("active"));
-    host.querySelector(`.stack[data-i="${t.dataset.i}"]`)?.classList.add("active");
-    const cx = pl + (+t.dataset.i + .5) * slot; const cur = $("#chartCursor"); cur.setAttribute("x1", cx); cur.setAttribute("x2", cx); cur.hidden = false;
-    const rows = CATS.filter((c) => b.counts[c.key]).map((c) => `<div class="r"><span><i style="background:${c.color}"></i>${c.name}</span><b>${b.counts[c.key]}</b></div>`).join("") || `<div class="r muted">no events</div>`;
-    tip.innerHTML = `<div class="t">${esc(bucketRange(b))}</div>${rows}${b.total ? `<div class="r" style="margin-top:4px;border-top:1px solid rgba(255,255,255,.15);padding-top:4px"><span>Total</span><b>${b.total}</b></div>` : ""}`;
-    const r = host.getBoundingClientRect(), sx = W / r.width;
-    tip.hidden = false;
-    const cxPx = cx / sx, flip = cxPx > r.width * 0.6;
-    tip.classList.toggle("flip", flip);
-    tip.style.left = `${cxPx + (flip ? -14 : 14)}px`;
-    tip.style.top = `${Math.min(Math.max(0, ev.clientY - r.top - 24), r.height - tip.offsetHeight - 4)}px`;
-  });
+  host.innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Contract events per ${stepName}">
+    <g class="grid axis">${gl}</g>
+    <rect class="band" id="chartBand" x="0" y="${pt}" width="${slot}" height="${ih}" hidden/>
+    <line class="base" x1="${pl}" x2="${W - pr}" y1="${pt + ih + .5}" y2="${pt + ih + .5}"/>
+    <g>${bars}</g><g class="axis">${xl}</g>
+    <line class="cursor" id="chartCursor" x1="0" x2="0" y1="${pt}" y2="${pt + ih}" hidden/>
+    <rect class="overlay" x="${pl}" y="${pt}" width="${iw}" height="${ih}" fill="transparent"/>
+  </svg><div class="xpill" id="xpill"></div><div class="tooltip" id="tip"></div>`;
+  const svgEl = host.querySelector("svg"), tip = $("#tip"), pill = $("#xpill"), band = $("#chartBand"), cur = $("#chartCursor");
+  const clear = () => { tip.classList.remove("on"); pill.classList.remove("on"); band.hidden = true; cur.hidden = true; host.removeAttribute("data-active"); host.querySelectorAll(".stack.active").forEach((g) => g.classList.remove("active")); };
+  const track = (ev) => {
+    const r = host.getBoundingClientRect(); const sx = W / r.width, sy = H / r.height;
+    const mx = (ev.clientX - r.left) * sx, my = (ev.clientY - r.top) * sy;
+    if (mx < pl || mx > W - pr || my < pt || my > pt + ih) { clear(); return; }
+    const i = Math.min(n - 1, Math.max(0, Math.floor((mx - pl) / slot)));
+    const b = buckets[i];
+    // cursor follows the pointer exactly; the band, focus and popup snap to the bucket under it
+    cur.setAttribute("x1", mx); cur.setAttribute("x2", mx); cur.hidden = false;
+    band.setAttribute("x", pl + i * slot); band.hidden = false;
+    if (host.dataset.active !== String(i)) {
+      host.dataset.active = i;
+      host.querySelectorAll(".stack.active").forEach((g) => g.classList.remove("active"));
+      host.querySelector(`.stack[data-i="${i}"]`)?.classList.add("active");
+      const rows = CATS.filter((c) => b.counts[c.key]).map((c) => `<div class="r"><span><i style="background:${c.color}"></i>${c.name}</span><b>${b.counts[c.key]}</b></div>`).join("") || `<div class="r muted"><span>no events in this window</span></div>`;
+      tip.innerHTML = `<div class="t">${esc(bucketRange(b))}</div>${rows}${b.total ? `<div class="r total"><span>Total</span><b>${b.total}</b></div>` : ""}`;
+    }
+    const at = new Date((b.t + ((mx - pl - i * slot) / slot) * b.step) * 1000);
+    pill.textContent = at.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+    const px = mx / sx, py = my / sy;
+    pill.style.setProperty("--x", `${Math.min(r.width - 40, Math.max(40, px))}px`); pill.classList.add("on");
+    const flip = px > r.width * 0.62;
+    const tx = flip ? px - 16 - tip.offsetWidth : px + 16;
+    const ty = Math.min(Math.max(0, py - 28), r.height - tip.offsetHeight - 30);
+    tip.style.setProperty("--tx", `${tx}px`); tip.style.setProperty("--ty", `${ty}px`); tip.classList.add("on");
+  };
+  svgEl.addEventListener("mousemove", track, { passive: true });
   svgEl.addEventListener("mouseleave", clear);
   $("#legend").innerHTML = CATS.map((c) => `<button data-cat="${c.key}" aria-pressed="${!UI.hiddenCats.has(c.key)}" data-tip="Click to ${UI.hiddenCats.has(c.key) ? "show" : "hide"} this stage"><i class="c-${c.key}"></i>${c.name}</button>`).join("");
 }
@@ -520,8 +537,11 @@ function scrub(sp, ev) {
   const pt = sp.querySelector(".pt"); pt.style.left = `${xs[i]}%`; pt.style.top = `${ys[i]}%`;
   const t = new Date((Number(sp.dataset.t0) + i * Number(sp.dataset.step)) * 1000);
   const v = sp.dataset.fmt === "eth" ? `${series[i].toFixed(3)} ETH` : fmtInt(series[i]);
-  const tile = sp.closest(".tile"); tile.classList.add("scrub");
-  tile.querySelector(".hv").textContent = `${v} ${sp.dataset.label} · ${t.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`;
+  const tip = sp.querySelector(".stip");
+  tip.innerHTML = `<b>${v}</b> ${esc(sp.dataset.label)}<span class="when">${t.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}</span>`;
+  tip.style.left = `${xs[i]}%`; tip.style.top = `${ys[i]}%`;
+  tip.classList.toggle("edge-l", xs[i] < 22); tip.classList.toggle("edge-r", xs[i] > 78); tip.classList.toggle("below", ys[i] < 45);
+  sp.closest(".tile").classList.add("scrub");
 }
 if (["bounties", "reputation", "log"].includes(location.hash.slice(1))) setTab(location.hash.slice(1));
 
