@@ -38,7 +38,7 @@ export type Task = z.infer<typeof TaskSchema>;
  * whether their numbers agree — so a silent change to grading is a silent change to who wins a
  * dispute. Pinning the version inside runParams makes a mismatch loud instead of invisible.
  */
-export const GRADER_VERSION = "1";
+export const GRADER_VERSION = "2";
 
 /**
  * The pinned evaluation protocol: everything other than the tasks that must be identical across
@@ -120,13 +120,31 @@ function parseNumber(s: string): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
-/** Multiple-choice letter in a free-form answer: "(B)", "B", "B)", "b.", "The answer is (B)". */
+/**
+ * Multiple-choice letter in a free-form answer: "(B)", "B", "B)", "b.", "The answer is (B)".
+ *
+ * Read the conclusion, not the first thing said. A model that reasons before answering enumerates
+ * the options first ("(A) no, (B) yes -> (B)"), so the earliest letter in the text is usually the
+ * first option *considered*, not the one chosen. Scanning forwards graded those as A, which
+ * penalised precisely the models that show their work — i.e. the strong yardstick — across the
+ * ~55% of every bundle that uses this grader, pushing the strong score toward failing its floor.
+ * So: an explicit answer marker wins, and otherwise the LAST choice mentioned does.
+ */
 export function parseChoice(answer: string): string | null {
-  const paren = answer.match(/\(([A-Za-z])\)/);
-  if (paren) return paren[1]!.toUpperCase();
-  const lead = answer.trim().match(/^([A-Za-z])(?:[).:\s]|$)/);
+  const t = answer.trim();
+  const last = (re: RegExp): string | null => {
+    const ms = [...t.matchAll(re)];
+    return ms.length ? ms[ms.length - 1]![1]!.toUpperCase() : null;
+  };
+  // "answer: (B)", "the answer is B", "final choice - C". The trailing lookahead stops this from
+  // biting the first letter of an ordinary word ("the answer is not clear" must not yield N).
+  const marked = last(/\b(?:answer|choice|option|selection)\b[\s:=\-\u2013\u2014]*(?:is[\s:=\-\u2013\u2014]*)?\(?([A-Za-z])\)?(?![A-Za-z])/gi);
+  if (marked) return marked;
+  const paren = last(/\(([A-Za-z])\)/g);
+  if (paren) return paren;
+  const lead = t.match(/^([A-Za-z])(?:[).:\s]|$)/);
   if (lead) return lead[1]!.toUpperCase();
-  const tail = answer.trim().match(/\b([A-Za-z])[).]?\s*$/);
+  const tail = t.match(/\b([A-Za-z])[).]?\s*$/);
   if (tail) return tail[1]!.toUpperCase();
   return null;
 }

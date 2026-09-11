@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { bundleBytes, bundleCommitment, canonicalBytes, grade, objectiveTaskChecks, parseBundle, type Bundle, type RunParams, type Task, DEFAULT_RUN_PARAMS, GRADER_VERSION, runParamsHash } from "../src/lib/bundle.js";
+import { bundleBytes, bundleCommitment, canonicalBytes, grade, objectiveTaskChecks, parseBundle, parseChoice, type Bundle, type RunParams, type Task, DEFAULT_RUN_PARAMS, GRADER_VERSION, runParamsHash } from "../src/lib/bundle.js";
 
 const task = (over: Partial<Task> = {}): Task => ({
   index: 0,
@@ -81,7 +81,8 @@ describe("grader version pinning", () => {
   });
 
   it("changing grading semantics changes the hash, so buyer and arbiter cannot silently diverge", () => {
-    const bumped: RunParams = { ...DEFAULT_RUN_PARAMS, graderVersion: "2" };
+    // Derived, not hardcoded: this must keep testing the invariant after any future bump.
+    const bumped: RunParams = { ...DEFAULT_RUN_PARAMS, graderVersion: `${GRADER_VERSION}-next` };
     expect(runParamsHash(bumped)).not.toBe(runParamsHash(DEFAULT_RUN_PARAMS));
   });
 
@@ -102,5 +103,41 @@ describe("grader version pinning", () => {
     expect(parsed.runParams.graderVersion).toBeUndefined();
     expect(runParamsHash(parsed.runParams)).toBe(runParamsHash(legacy));
     expect(runParamsHash(parsed.runParams)).not.toBe(runParamsHash(DEFAULT_RUN_PARAMS));
+  });
+});
+
+describe("choice grader", () => {
+  const pick = (g: string) => task({ grader: { type: "choice", value: g }, reference: g });
+
+  it("reads terse answers", () => {
+    for (const a of ["(B)", "B", "B)", "b.", "The answer is (B)", "The answer is B", "(B) Tuesday"]) {
+      expect(parseChoice(a)).toBe("B");
+    }
+  });
+
+  it("reads the conclusion, not the first option considered", () => {
+    // A reasoning model enumerates before it commits. Scanning forwards returned "A" for every one
+    // of these, silently marking the strong model wrong across the ~55% of each bundle that uses
+    // this grader and pushing its score toward failing the floor it is supposed to clear.
+    for (const a of [
+      "Options are (A) Monday (B) Tuesday. The answer is (B)",
+      "(A) is wrong. (B) is correct.",
+      "Let me check each: (A) no, (B) yes. Answer: (B)",
+      "The correct choice is (B) Tuesday, not (A) Monday.",
+    ]) {
+      expect(parseChoice(a)).toBe("B");
+    }
+  });
+
+  it("does not invent a letter out of ordinary prose", () => {
+    expect(parseChoice("The answer is not clear")).not.toBe("N");
+    expect(parseChoice("Yes")).toBeNull();
+    expect(parseChoice("The answer is Tuesday")).toBeNull();
+  });
+
+  it("grades through the task grader", () => {
+    expect(grade(pick("B"), "Let me check each: (A) no, (B) yes. Answer: (B)")).toBe(1);
+    expect(grade(pick("B"), "(A)")).toBe(0);
+    expect(grade(pick("B"), "")).toBe(0);
   });
 });

@@ -33,8 +33,11 @@ A **task** is a JSON object:
   "reference": "B", "sourceId": "bbh/date_understanding/17" }
 ```
 
-`sourceId` is optional provenance. Grader semantics: `choice` compares the first multiple-choice letter
-found in the answer ("(B)", "B", "B)", "the answer is (B)"); `numeric` compares the last number in the
+`sourceId` is optional provenance. Grader semantics: `choice` compares the multiple-choice letter the
+answer *concludes* with — an explicit marker ("answer: (B)", "the choice is B") wins, otherwise the
+LAST letter mentioned ("(A) no, (B) yes" is B, not A). v1 took the first letter found, which graded
+a model that reasons through the options before committing as having picked the first one it named;
+that is the change v2 pins; `numeric` compares the last number in the
 answer within `tolerance`; `exact` compares after trimming, stripping quotes and trailing punctuation,
 collapsing whitespace and lower-casing; `regex` is case-insensitive.
 
@@ -61,7 +64,7 @@ The contract pins `runParamsHash = keccak256(canonical(runParams))`. In protocol
 recognised value, so the hash acts as a version pin:
 
 ```json
-{ "graderVersion": "1", "max_tokens": 64, "system": "You are being evaluated. Reply with only the final answer and nothing else.", "temperature": 0 }
+{ "graderVersion": "2", "max_tokens": 64, "system": "You are being evaluated. Reply with only the final answer and nothing else.", "temperature": 0 }
 ```
 
 `graderVersion` pins the *grading* semantics described above — answer normalisation, the number
@@ -72,8 +75,8 @@ to who wins a dispute. Bump it whenever the meaning of a score changes.
 Self-check. Your canonical bytes and hash must be exactly:
 
 ```
-{"graderVersion":"1","max_tokens":64,"system":"You are being evaluated. Reply with only the final answer and nothing else.","temperature":0}
-keccak256 -> 0xfe9b5826959b619ad6b3f456d11438ea81264f57ee0c3f3c64a68d1dcaba896f
+{"graderVersion":"2","max_tokens":64,"system":"You are being evaluated. Reply with only the final answer and nothing else.","temperature":0}
+keccak256 -> 0x6c1ca65c181d543864f0eb9ea44263830730d4fcdd77a6b1f5461bdf7793b3d5
 ```
 
 If you do not reproduce that hash, your canonicalization or field set is wrong and every bounty will
