@@ -203,14 +203,15 @@ function stageCounts() {
 
 // ---------- tiny SVG helpers ----------
 function sparkline(series, color) {
-  const w = 160, h = 40, pad = 2;
+  const w = 160, h = 44, pad = 4;
   const max = Math.max(...series) || 1, n = series.length;
   const x = (i) => pad + (i * (w - 2 * pad)) / Math.max(1, n - 1), y = (v) => h - pad - (v / max) * (h - 2 * pad);
   const pts = series.map((v, i) => `${x(i).toFixed(1)},${y(v).toFixed(1)}`);
   const line = `M${pts.join("L")}`;
   const area = `${line}L${x(n - 1).toFixed(1)},${h}L${x(0).toFixed(1)},${h}Z`;
   const gid = `g${Math.random().toString(36).slice(2, 8)}`;
-  return `<svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" aria-hidden="true"><defs><linearGradient id="${gid}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${color}" stop-opacity=".28"/><stop offset="1" stop-color="${color}" stop-opacity="0"/></linearGradient></defs><path class="area" d="${area}" fill="url(#${gid})"/><path class="line" d="${line}" fill="none" stroke="${color}" stroke-width="1.5" vector-effect="non-scaling-stroke" stroke-linejoin="round"/><circle cx="${x(n - 1).toFixed(1)}" cy="${y(series[n - 1]).toFixed(1)}" r="2.5" fill="${color}"/></svg>`;
+  const dot = `<i class="dot" style="left:${((x(n - 1) / w) * 100).toFixed(2)}%;top:${((y(series[n - 1]) / h) * 100).toFixed(2)}%;background:${color}"></i>`;
+  return `<svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" aria-hidden="true"><defs><linearGradient id="${gid}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${color}" stop-opacity=".28"/><stop offset="1" stop-color="${color}" stop-opacity="0"/></linearGradient></defs><path class="area" d="${area}" fill="url(#${gid})"/><path class="line" d="${line}" fill="none" stroke="${color}" stroke-width="1.5" vector-effect="non-scaling-stroke" stroke-linejoin="round"/></svg>${dot}`;
 }
 // Sparklines: 24 equal buckets from the first event to now, so the line shows the shape of the
 // history rather than the chart's padded range.
@@ -284,8 +285,8 @@ function renderStats(animate) {
   const d = delta(last24, prev24);
   const tiles = [
     { k: "Bounties", num: b.length, fmt: (v) => fmtInt(Math.round(v)), sub: created24 ? { cls: "up", txt: `+${created24} in 24h` } : { cls: "flat", txt: `${b.filter((x) => LIVE.has(STATUS[x.status])).length} in progress` }, spark: cumulative((e) => e.eventName === "BountyCreated" ? 1 : 0), color: "var(--s-bounty)", foot: `${b.filter((x) => STATUS[x.status] === "Open").length} open · ${b.filter((x) => LIVE.has(STATUS[x.status])).length} in progress · ${term} closed` },
-    { k: "Reward volume", num: ethNum(escrowVol), fmt: (v) => v.toFixed(3), unit: "ETH", sub: { cls: "flat", txt: `${ethNum(settledVol).toFixed(3)} paid out` }, spark: cumulative((e) => e.eventName === "BountyCreated" ? ethNum(e.args.reward) : 0), color: "var(--s-settle)", foot: "escrowed by buyers since deploy; payouts are pull-payments" },
-    { k: "Events (24h)", num: last24, fmt: (v) => fmtInt(Math.round(v)), sub: { cls: d.cls, txt: `${d.txt} vs prior 24h` }, spark: perBucket(() => 1), color: "var(--s-commit)", foot: `${fmtInt(S.events.length)} total contract events` },
+    { k: "Reward volume", num: ethNum(escrowVol), fmt: (v) => v.toFixed(3), unit: "ETH", sub: { cls: "flat", txt: `${ethNum(settledVol).toFixed(3)} paid out` }, spark: cumulative((e) => e.eventName === "BountyCreated" ? ethNum(e.args.reward) : 0), color: "var(--s-settle)", foot: "escrowed by buyers since deploy" },
+    { k: "Events (24h)", num: last24, fmt: (v) => fmtInt(Math.round(v)), sub: { cls: d.cls, txt: prev24 ? `${d.txt} vs prior 24h` : `${d.txt} in 24h` }, spark: perBucket(() => 1), color: "var(--s-commit)", foot: `${fmtInt(S.events.length)} total contract events` },
     { k: "Seller success", num: term ? (settled / term) * 100 : null, fmt: (v) => (v === null ? "—" : `${v.toFixed(0)}%`), sub: { cls: "flat", txt: `${disputes} dispute${disputes === 1 ? "" : "s"}` }, spark: cumulative((e) => e.eventName === "Settled" ? 1 : 0), color: "var(--s-delivery)", foot: rulings.length ? `rulings: ${rulings.filter((r) => r === 1).length} seller · ${rulings.filter((r) => r === 2).length} buyer · ${rulings.filter((r) => r === 0).length} refused` : "settled ÷ closed bounties" },
   ];
   $("#stats").innerHTML = tiles.map((t, i) => `<div class="tile ${animate ? "in" : ""}" style="--d:${160 + i * 70}ms"><div class="k">${t.k}</div><div class="v"><span class="num" data-k="${t.k}"></span>${t.unit ? `<small>${t.unit}</small>` : ""}<span class="delta ${t.sub.cls}">${t.sub.txt}</span></div><div class="spark">${sparkline(t.spark, t.color)}</div><div class="foot">${t.foot}</div></div>`).join("");
@@ -331,7 +332,7 @@ function renderChart(animate = false) {
     const rows = CATS.filter((c) => b.counts[c.key]).map((c) => `<div class="r"><span><i style="background:${c.color}"></i>${c.name}</span><b>${b.counts[c.key]}</b></div>`).join("") || `<div class="r muted">no events</div>`;
     tip.innerHTML = `<div class="t">${esc(bucketRange(b))}</div>${rows}${b.total ? `<div class="r" style="margin-top:4px;border-top:1px solid rgba(255,255,255,.15);padding-top:4px"><span>Total</span><b>${b.total}</b></div>` : ""}`;
     const r = host.getBoundingClientRect(), sx = W / r.width;
-    tip.style.left = `${(pl + (+t.dataset.i + .5) * slot) / sx}px`; tip.style.top = `${Math.max(0, y(b.total) / (H / r.height) - 10)}px`; tip.hidden = false;
+    tip.style.left = `${Math.min(r.width - 90, Math.max(90, (pl + (+t.dataset.i + .5) * slot) / sx))}px`; tip.style.top = `${Math.max(0, y(b.total) / (H / r.height) - 10)}px`; tip.hidden = false;
   });
   host.querySelector("svg").addEventListener("mouseleave", () => { $("#tip").hidden = true; });
   $("#legend").innerHTML = CATS.map((c) => `<span><i class="c-${c.key}"></i>${c.name}</span>`).join("");
@@ -347,7 +348,7 @@ function renderFunnel(animate = false) {
   const steps = [
     ["Created", "buyer escrowed a reward", c.created],
     ["Committed", "seller bonded a hidden bundle", c.committed],
-    ["Sampled", "blockhash-chosen tasks revealed with proofs", c.sampled],
+    ["Sampled", "blockhash-picked tasks revealed with proofs", c.sampled],
     ["Approved", "buyer judged the sample sound", c.approved],
     ["Delivered", "ciphertext posted to the buyer's key", c.delivered],
     ["Accepted", "buyer reran the claims and paid", c.accepted],
@@ -387,9 +388,9 @@ function renderBounties() {
       <td><span class="pill s-${st}">${st}</span></td>
       <td><div class="nowrap">${esc(s.domainTag)}</div><div class="faint label-12 nowrap">${s.taskCount} tasks · reveal ${s.sampleSize} · ${s.runs} run${s.runs === 1 ? "" : "s"}</div></td>
       <td>${bandHTML(s)}</td>
-      <td class="r num">${eth(b.reward)}<div class="faint">bond ${eth(b.sellerBond)}</div></td>
+      <td class="r num">${eth(b.reward)}${b.sellerBond > 0n ? `<div class="faint">bond ${eth(b.sellerBond)}</div>` : ""}</td>
       <td>${addr(b.buyer)}</td><td>${addr(b.seller)}</td>
-      <td class="nowrap">${last ? `<div>${last.eventName}</div><div class="faint label-12">${tsOf(last) ? fmtDateTime(tsOf(last)) : ""} ${tx(last.transactionHash, "")}</div>` : `<span class="faint">—</span>`}</td></tr>`);
+      <td class="nowrap">${last ? `<div>${last.eventName}</div><div class="faint label-12" title="${tsOf(last) ? fmtDateTime(tsOf(last)) : ""}">${tsOf(last) ? rel(tsOf(last)) : ""} ${tx(last.transactionHash, "")}</div>` : `<span class="faint">—</span>`}</td></tr>`);
     if (open) rows.push(`<tr class="detail"><td colspan="9">${detailHTML(i, b, evs)}</td></tr>`);
   }
   tbody.innerHTML = rows.join("") || `<tr><td colspan="9" class="empty">${total ? "No bounties match this filter." : "No bounties yet. Run the buyer agent to post one."}</td></tr>`;
@@ -454,7 +455,7 @@ $("#themeBtn").addEventListener("click", () => {
   try { localStorage.setItem("eb-theme", next); } catch {}
 });
 let rt; addEventListener("resize", () => { clearTimeout(rt); rt = setTimeout(() => renderChart(false), 120); });
-if (["bounties", "reputation", "log", "mechanism"].includes(location.hash.slice(1))) setTab(location.hash.slice(1));
+if (["bounties", "reputation", "log"].includes(location.hash.slice(1))) setTab(location.hash.slice(1));
 
 renderAll();
 refresh();

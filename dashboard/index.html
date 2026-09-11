@@ -80,6 +80,8 @@
   code, .mono { font-family: var(--mono); font-size: 13px; }
   button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; }
   [hidden] { display: none !important; }
+  :focus-visible { outline: 2px solid var(--blue-700); outline-offset: 2px; border-radius: 6px; }
+  .search:focus-within input:focus-visible { outline: none; }
   .wrap { max-width: 1200px; margin: 0 auto; padding: 0 24px; }
   .muted { color: var(--gray-900); } .faint { color: var(--gray-700); }
   .ok { color: var(--green-900); } .bad { color: var(--red-900); } .warn { color: var(--amber-900); }
@@ -99,7 +101,7 @@
   .in { animation: rise .55s cubic-bezier(.2,.7,.2,1) both; animation-delay: var(--d, 0ms); }
   @keyframes reveal { from { clip-path: inset(-4px 100% -4px -4px); } to { clip-path: inset(-4px -4px -4px -4px); } }
   .tile.in .spark svg { animation: reveal 1.1s cubic-bezier(.2,.7,.2,1) .25s both; }
-  .tile.in .spark circle { opacity: 0; animation: fade .3s ease-out 1.25s forwards; }
+  .tile.in .spark .dot { opacity: 0; animation: fade .3s ease-out 1.25s forwards; }
   .chart .stack { transform-box: fill-box; transform-origin: 50% 100%; }
   .chart.animate .stack { animation: grow .6s cubic-bezier(.2,.7,.2,1) both; animation-delay: calc(var(--i) * 14ms); }
   .chart.animate .axis, .chart.animate .grid, .chart.animate .base { opacity: 0; animation: fade .5s ease-out .1s forwards; }
@@ -109,12 +111,12 @@
   .skel::after { content: ""; position: absolute; inset: 0; background: linear-gradient(90deg, transparent 0%, var(--gray-a400) 50%, transparent 100%); background-size: 200% 100%; animation: shimmer 1.4s linear infinite; }
   .skel * { visibility: hidden; }
   @media (prefers-reduced-motion: reduce) {
-    .in, .tile.in .spark svg, .tile.in .spark circle, .chart.animate .stack, .chart.animate .axis, .chart.animate .grid, .chart.animate .base, .skel::after { animation: none !important; opacity: 1; stroke-dasharray: none; transform: none; }
+    .in, .tile.in .spark svg, .tile.in .spark .dot, .chart.animate .stack, .chart.animate .axis, .chart.animate .grid, .chart.animate .base, .skel::after { animation: none !important; opacity: 1; stroke-dasharray: none; transform: none; }
     .funnel .bar i, .funnel .n { transition: none; }
   }
 
   /* ---------- top bar ---------- */
-  .topbar { position: sticky; top: 0; z-index: 20; background: color-mix(in srgb, var(--bg-100) 82%, transparent); backdrop-filter: saturate(180%) blur(12px); -webkit-backdrop-filter: saturate(180%) blur(12px); border-bottom: 1px solid var(--gray-a400); }
+  .topbar { position: sticky; top: 0; z-index: 20; background: var(--bg-100); border-bottom: 1px solid var(--gray-a400); }
   .topbar .wrap { display: flex; align-items: center; gap: 20px; height: 56px; }
   .brand { display: flex; align-items: center; gap: 10px; font-weight: 600; letter-spacing: -0.01em; }
   .brand svg { width: 24px; height: 24px; }
@@ -177,19 +179,21 @@
   .card-h .sub { color: var(--gray-900); font-size: 13px; }
   .card-h .spacer { flex: 1; }
   .card-b { padding: 16px 20px 20px; }
+  .card-h + .scroll-x { margin-top: 12px; }
 
   /* stat tiles */
   .stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; }
-  .tile { background: var(--bg-100); border-radius: 12px; box-shadow: var(--shadow-sm); padding: 16px 18px 12px; display: flex; flex-direction: column; gap: 6px; min-width: 0; transition: box-shadow .15s; }
+  .tile { background: var(--bg-100); border-radius: 12px; box-shadow: var(--shadow-sm); padding: 20px 20px 16px; display: flex; flex-direction: column; min-width: 0; transition: box-shadow .15s; }
   .tile:hover { box-shadow: var(--shadow-md); }
-  .tile .k { color: var(--gray-900); font-size: 13px; display: flex; align-items: center; gap: 6px; }
+  .tile .k { color: var(--gray-900); font-size: 13px; line-height: 18px; display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
   .tile .v { font-size: 28px; line-height: 34px; letter-spacing: -0.03em; font-weight: 600; font-variant-numeric: tabular-nums; display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
   .tile .v small { font-size: 13px; line-height: 16px; letter-spacing: 0; font-weight: 500; color: var(--gray-900); }
   .tile .delta { font-size: 13px; font-weight: 500; letter-spacing: 0; }
   .tile .delta.up { color: var(--green-900); } .tile .delta.down { color: var(--red-900); } .tile .delta.flat { color: var(--gray-800); }
-  .tile .spark { height: 40px; margin-top: 4px; }
-  .tile .spark svg { width: 100%; height: 40px; display: block; overflow: visible; }
-  .tile .foot { color: var(--gray-800); font-size: 12px; line-height: 16px; }
+  .tile .spark { position: relative; height: 44px; margin: 16px 0 12px; }
+  .tile .spark svg { position: absolute; inset: 0; width: 100%; height: 100%; display: block; overflow: visible; }
+  .tile .spark .dot { position: absolute; width: 7px; height: 7px; border-radius: 50%; transform: translate(-50%, -50%); box-shadow: 0 0 0 2px var(--bg-100); }
+  .tile .foot { color: var(--gray-800); font-size: 12px; line-height: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
   /* segmented control */
   .seg { display: inline-flex; padding: 2px; border-radius: 8px; background: var(--gray-100); border: 1px solid var(--gray-a200); }
@@ -202,8 +206,8 @@
   .chart .axis text, .chart text { fill: var(--gray-800); font-family: var(--mono); font-size: 11px; }
   .chart svg { width: 100%; height: 100%; display: block; }
   .chart .bar { transition: opacity .1s; }
-  .chart .hit { fill: transparent; }
-  .chart .hit:hover ~ .cursor, .chart .hit:hover { }
+  .chart .hit { fill: transparent; transition: fill .1s; }
+  .chart .hit:hover { fill: var(--gray-a200); }
   .chart .axis text { fill: var(--gray-800); font-family: var(--mono); font-size: 11px; }
   .chart .grid line { stroke: var(--gray-a400); stroke-dasharray: 2 4; }
   .chart .base { stroke: var(--gray-500); }
@@ -216,11 +220,12 @@
   .c-bounty { background: var(--s-bounty); } .c-commit { background: var(--s-commit); } .c-delivery { background: var(--s-delivery); } .c-dispute { background: var(--s-dispute); } .c-settle { background: var(--s-settle); } .c-admin { background: var(--s-admin); }
 
   /* funnel */
-  .funnel { display: grid; gap: 8px; }
-  .funnel .step { display: grid; grid-template-columns: 22px 1fr auto; align-items: center; gap: 10px; font-size: 13px; }
+  .funnel { display: grid; gap: 12px; }
+  .funnel .step { display: grid; grid-template-columns: 22px 1fr 28px; align-items: center; gap: 12px; font-size: 13px; }
+  .funnel .cnt { text-align: right; }
   .funnel .n { width: 22px; height: 22px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-family: var(--mono); font-size: 11px; background: var(--gray-100); color: var(--gray-900); border: 1px solid var(--gray-a400); }
   .funnel .n.on { background: var(--gray-1000); color: var(--bg-100); border-color: var(--gray-1000); }
-  .funnel .bar { height: 6px; border-radius: 3px; background: var(--gray-200); overflow: hidden; margin-top: 4px; }
+  .funnel .bar { height: 6px; border-radius: 3px; background: var(--gray-200); overflow: hidden; margin-top: 6px; }
   .funnel .bar i { display: block; height: 100%; background: var(--gray-1000); border-radius: 3px; }
   .funnel .name { font-weight: 500; } .funnel .desc { color: var(--gray-800); font-size: 12px; }
   .funnel .cnt { font-family: var(--mono); font-size: 13px; font-variant-numeric: tabular-nums; }
@@ -244,7 +249,8 @@
   /* tables */
   .tbl { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 13px; }
   .tbl th { text-align: left; color: var(--gray-900); font-weight: 500; font-size: 12px; padding: 10px 12px; border-bottom: 1px solid var(--gray-a400); white-space: nowrap; background: var(--bg-100); }
-  .tbl td { padding: 12px; border-bottom: 1px solid var(--gray-a200); vertical-align: top; }
+  .tbl td { padding: 12px 10px; border-bottom: 1px solid var(--gray-a200); vertical-align: top; }
+  .tbl th:first-child, .tbl td:first-child { padding-left: 14px; padding-right: 0; }
   .tbl tr:last-child td { border-bottom: 0; }
   .tbl .r { text-align: right; font-variant-numeric: tabular-nums; }
   .tbl .num { font-family: var(--mono); font-variant-numeric: tabular-nums; font-size: 12.5px; white-space: nowrap; }
@@ -274,8 +280,8 @@
   .s-Cancelled { background: var(--gray-100); color: var(--gray-900); }
 
   /* difficulty band */
-  .band { width: 180px; }
-  .band .lbl span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 130px; }
+  .band { width: 150px; }
+  .band .lbl span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 108px; }
   .band .track { position: relative; height: 6px; border-radius: 3px; background: var(--gray-200); margin: 6px 0 4px; }
   .band .weak { position: absolute; left: 0; top: 0; height: 100%; background: var(--red-700); opacity: .7; border-radius: 3px 0 0 3px; }
   .band .strong { position: absolute; right: 0; top: 0; height: 100%; background: var(--green-700); opacity: .8; border-radius: 0 3px 3px 0; }
@@ -298,7 +304,7 @@
   .task .p { white-space: pre-wrap; word-break: break-word; }
   .task .ref { margin-top: 6px; font-family: var(--mono); font-size: 12px; color: var(--gray-900); } .task .ref b { color: var(--green-900); font-weight: 500; }
   .kv { display: grid; grid-template-columns: max-content 1fr; gap: 6px 14px; font-size: 12.5px; margin-top: 14px; }
-  .kv b { color: var(--gray-900); font-weight: 500; } .kv span { font-family: var(--mono); font-size: 11.5px; word-break: break-all; color: var(--gray-1000); }
+  .kv b { color: var(--gray-900); font-weight: 500; } .kv span { font-family: var(--mono); font-size: 11.5px; overflow-wrap: anywhere; color: var(--gray-1000); min-width: 0; }
   .deadlines { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
 
   /* log */
@@ -313,20 +319,6 @@
   .chip[aria-pressed="true"] { background: var(--gray-1000); color: var(--bg-100); border-color: var(--gray-1000); }
   .chip i { width: 8px; height: 8px; border-radius: 2px; }
 
-  /* mechanism */
-  .steps { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 12px; }
-  .step-card { background: var(--bg-100); border-radius: 10px; box-shadow: var(--shadow-sm); padding: 14px; display: flex; flex-direction: column; gap: 6px; }
-  .step-card .n { font-family: var(--mono); font-size: 11px; color: var(--gray-800); }
-  .step-card .t { font-weight: 600; letter-spacing: -0.01em; }
-  .step-card .d { font-size: 12.5px; line-height: 18px; color: var(--gray-900); }
-  .notes { display: grid; grid-template-columns: 1fr 1fr; gap: 16px 32px; }
-  .note b { display: block; font-weight: 600; margin-bottom: 4px; letter-spacing: -0.01em; }
-  .note p { margin: 0; color: var(--gray-900); font-size: 13px; line-height: 20px; }
-  .note code { background: var(--gray-100); border: 1px solid var(--gray-a400); border-radius: 4px; padding: 0 5px; font-size: 12px; }
-  .callout { border-radius: 10px; padding: 14px 16px; background: var(--amber-100); color: var(--amber-1000); font-size: 13px; line-height: 20px; display: flex; gap: 10px; }
-  .callout svg { width: 16px; height: 16px; flex: none; margin-top: 2px; color: var(--amber-900); }
-  .callout b { font-weight: 600; }
-
   footer { border-top: 1px solid var(--gray-a400); background: var(--bg-100); }
   footer .wrap { display: flex; flex-wrap: wrap; gap: 8px 24px; align-items: center; padding: 20px 24px; color: var(--gray-900); font-size: 13px; }
   footer .spacer { flex: 1; }
@@ -334,13 +326,12 @@
   @media (max-width: 1000px) {
     .hero .wrap { grid-template-columns: 1fr; padding-top: 40px; }
     .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-    .chart-grid, .notes, .detail-grid { grid-template-columns: 1fr; }
-    .steps { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .chart-grid, .detail-grid { grid-template-columns: 1fr; }
     .h48 { font-size: 36px; line-height: 42px; }
   }
   @media (max-width: 640px) {
     .wrap { padding: 0 16px; }
-    .stats, .steps { grid-template-columns: 1fr; }
+    .stats { grid-template-columns: 1fr; }
     .nav .hide-sm { display: none; }
     .log .ln { grid-template-columns: 1fr; gap: 2px; }
     .tabs { overflow-x: auto; }
@@ -385,7 +376,7 @@
       </p>
       <div class="cta">
         <a class="btn primary" id="ctaContract" target="_blank" rel="noopener">View contract on Etherscan <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M6 3h7v7M13 3 5 11"/></svg></a>
-        <button class="btn" data-tab="mechanism">How the mechanism works</button>
+        <a class="btn" href="https://github.com/shaunikm/technical-interview#readme" target="_blank" rel="noopener">How the mechanism works <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M6 3h7v7M13 3 5 11"/></svg></a>
       </div>
     </div></div>
     <div class="status-card in" id="statusCard" style="--d:120ms">
@@ -428,7 +419,6 @@
     <button role="tab" data-tab="bounties" aria-selected="true">Bounties <span class="cnt" id="cntBounties">0</span></button>
     <button role="tab" data-tab="reputation">Reputation</button>
     <button role="tab" data-tab="log">Agent log <span class="cnt" id="cntLog">0</span></button>
-    <button role="tab" data-tab="mechanism">How it works</button>
   </div>
 
   <section class="card in" data-panel="bounties" role="tabpanel" style="--d:580ms">
@@ -470,28 +460,6 @@
     <div class="log" id="log" style="margin-top:12px"></div>
   </section>
 
-  <section data-panel="mechanism" role="tabpanel" hidden style="display:grid;gap:16px">
-    <div class="steps" id="steps">
-      <div class="step-card"><span class="n">01 · createBounty</span><span class="t">Bounty</span><span class="d">Buyer escrows the reward and pins domain, N, k, weak/strong model ids, difficulty band, runs, tolerance and run params.</span></div>
-      <div class="step-card"><span class="n">02 · commit</span><span class="t">Commit</span><span class="d">Seller posts a Merkle root over the tasks, the bundle hash and a bond ≥ 50 % of the reward. The sample block is the next block.</span></div>
-      <div class="step-card"><span class="n">03 · revealSample</span><span class="t">Sample</span><span class="d">blockhash picks k of N indices; the seller must reveal exactly those with proofs. No cherry-picking, and re-rolling costs 10 % of the bond.</span></div>
-      <div class="step-card"><span class="n">04 · approveSample</span><span class="t">Judge</span><span class="d">Buyer checks the sample is well-posed and in domain, then approves or rejects. Rejection never slashes, it only marks reputation.</span></div>
-      <div class="step-card"><span class="n">05 · deliver</span><span class="t">Deliver</span><span class="d">Bundle encrypted to the buyer's X25519 key and posted in the event log, so delivery itself is public and provable.</span></div>
-      <div class="step-card"><span class="n">06 · accept / dispute</span><span class="t">Verify</span><span class="d">Buyer decrypts, checks hash and root, reruns the claims and accepts, or disputes to an ERC-792 arbitrator that reruns and rules.</span></div>
-    </div>
-    <div class="card">
-      <div class="card-h"><h2 class="h16">Design decisions</h2></div>
-      <div class="card-b notes">
-        <div class="note"><b>Why a random sample</b><p>The seller commits before knowing which tasks will be shown. A bundle with junk fraction f survives a k-task sample with probability (1−f)<sup>k</sup>: at k = 4, 30 % junk is caught 76 % of the time. Walking away after seeing the sample costs 10 % of the bond, so re-rolling is priced.</p></div>
-        <div class="note"><b>Why claims, not "quality"</b><p>"Weak model ≤ 35 %, strong model ≥ 65 %, null policy ≤ 5 %" is reproducible by the buyer and the arbiter with the committed run params; "useful" is not. Tolerance ≥ 2·SE (Miller 2024) absorbs rerun noise. The contract only enforces what it can check.</p></div>
-        <div class="note"><b>Why Sepolia L1</b><p>Sampling uses <code>blockhash(sampleBlock)</code>. Arbitrum documents its blockhash as "cryptographically insecure, pseudo-random" and returns constant 1 for <code>prevrandao</code>; the mechanism is stronger on L1.</p></div>
-        <div class="note"><b>Why ERC-792</b><p>Disputes go through Kleros' arbitration interface, so the single bonded arbiter used here can be swapped for a court with one <code>setArbitrator</code> call. Rulings: 1 seller, 2 buyer, 0 refused → 50/50 split.</p></div>
-        <div class="note"><b>Liveness</b><p>Every state has a deadline anyone can <code>finalize</code>: a missed delivery slashes the seller, a silent buyer settles to the seller, a silent arbiter splits. Payouts are pull-payments, so no party can lock funds.</p></div>
-        <div class="note"><b>Who acts here</b><p>Three Node processes (buyer, seller, arbiter) each hold a key, read the same events through an RPC and send transactions straight to the contract. This page holds no keys and sends nothing; to take part you run an agent, not a button.</p></div>
-      </div>
-    </div>
-    <div class="callout"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 2.5 14 13H2z"/><path d="M8 6.5v3M8 11.5v.5"/></svg><div><b>Limitation, stated plainly.</b> The contract enforces delivery and whether the listed difficulty claims hold. It does not verify that tasks are useful beyond the sampled ones, that they stay secret after sale, or that the single bonded arbitrator is honest. Those are contract terms backed by reputation, not cryptography.</div></div>
-  </section>
 </main>
 
 <footer>
