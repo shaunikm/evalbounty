@@ -126,7 +126,12 @@
 </footer>
 
 <script src="./config.js"></script>
-<script src="./config.local.js"></script><!-- optional local override (gitignored) -->
+<script>
+  // Local-only override (gitignored). Only requested on localhost so hosted deployments never 404 on it.
+  if (/^(localhost|127\.0\.0\.1)$/.test(location.hostname)) {
+    document.write('<script src="./config.local.js"><\/script>');
+  }
+</script>
 <script src="./abi.js"></script>
 <script type="module">
 import { createPublicClient, http, parseEventLogs, formatEther } from "https://esm.sh/viem@2.56.3";
