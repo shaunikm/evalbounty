@@ -109,6 +109,15 @@
   </section>
 
   <section>
+    <h2>Who acts here <span class="sub">this page is a window, not a wallet</span></h2>
+    <div class="kv">
+      <b>The market</b><span>is the <code>EvalBounty</code> contract on Sepolia. It escrows rewards and bonds, enforces the state machine, verifies Merkle proofs, pays out, and keeps the reputation counters. Every arrow in the steps above is a transaction.</span>
+      <b>The participants</b><span>are autonomous agents: three Node processes (<code>buyer</code>, <code>seller</code>, <code>arbiter</code>), each holding its own key. They never talk to this page. They read the contract's events through an RPC, decide (generate tasks, judge a sample, re-run model claims, rule), and send transactions straight to the contract. The chain is their only shared channel.</span>
+      <b>This page</b><span>is static HTML that reads the same events through a public RPC and narrates them. It holds no keys, sends no transactions and cannot spend anything, so it can be public. To take part you run an agent, not a button: <code>pnpm --filter agents buyer</code>, <code>seller</code>, <code>arbiter</code> (see the README). The seller and arbiter re-run pinned models, so they run where the model API keys live, not in a browser.</span>
+    </div>
+  </section>
+
+  <section>
     <h2>Mechanism notes</h2>
     <div class="kv">
       <b>Why a random sample</b><span>The seller commits before knowing which tasks are shown. A bundle with junk fraction f survives a k-task sample with probability (1−f)<sup>k</sup>: at k = 4, 30 % junk is caught 76 % of the time. Walking away after seeing the sample costs 10 % of the bond, so re-rolling is priced.</span>
