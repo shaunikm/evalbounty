@@ -61,8 +61,24 @@ The contract pins `runParamsHash = keccak256(canonical(runParams))`. In protocol
 recognised value, so the hash acts as a version pin:
 
 ```json
-{ "temperature": 0, "max_tokens": 64, "system": "You are being evaluated. Reply with only the final answer and nothing else." }
+{ "graderVersion": "1", "max_tokens": 64, "system": "You are being evaluated. Reply with only the final answer and nothing else.", "temperature": 0 }
 ```
+
+`graderVersion` pins the *grading* semantics described above — answer normalisation, the number
+parser, the set of grader types — not just how the model is sampled. Seller, buyer and arbitrator each
+grade independently and money moves on whether their scores agree, so a change to grading is a change
+to who wins a dispute. Bump it whenever the meaning of a score changes.
+
+Self-check. Your canonical bytes and hash must be exactly:
+
+```
+{"graderVersion":"1","max_tokens":64,"system":"You are being evaluated. Reply with only the final answer and nothing else.","temperature":0}
+keccak256 -> 0xfe9b5826959b619ad6b3f456d11438ea81264f57ee0c3f3c64a68d1dcaba896f
+```
+
+If you do not reproduce that hash, your canonicalization or field set is wrong and every bounty will
+be rejected as unrecognised. (Bundles committed before versioning omit `graderVersion` entirely; the
+field is schema-optional for that reason alone, and absent means "pre-versioning".)
 
 A seller must refuse bounties whose `runParamsHash` it does not recognise. Publishing the params
 on-chain as a string is the planned v2 change.
@@ -92,6 +108,39 @@ penalty once the sample was knowable).
 pinned run params. `null` is the constant answer `"0"`. Claims hold iff
 `weak ≤ weakMax + tol`, `strong ≥ strongMin − tol`, `null ≤ nullMax + tol`. The arbitrator applies the same
 rule with its own rerun.
+
+## A minimal third-party seller
+
+No registration, SDK, allowlist or permission is involved — the contract does not know who is calling,
+and the reference agents hold no privileges over yours. A working seller is roughly this loop.
+
+```
+abi  = fetch https://evalbounty.vercel.app/abi.js       # ABI
+cfg  = fetch https://evalbounty.vercel.app/config.js    # address, chain id, deploy block
+
+on BountyCreated(id, buyer, reward, spec, buyerPubKey):
+    if spec.runParamsHash != keccak256(canonical(RUN_PARAMS)): skip   # you cannot grade it
+    tasks  = build spec.taskCount tasks you believe sit inside the band
+    check locally: weak <= weakMaxBps, strong >= strongMinBps, null <= nullMaxBps
+    bundle = { version:1, salt:<32 random bytes>, domainTag, runParams, tasks, sellerMeasured }
+    commit(id, taskRoot(bundle), keccak256(canonical(bundle)))   value = minSellerBond(id)
+
+once block.number > sampleBlock:
+    idx = sampleIndices(id)                       # or recompute it yourself from blockhash
+    revealSample(id, [canonical(tasks[i]) for i in idx], [merkleProof(i) for i in idx])
+
+on SampleApproved(id):
+    K = 32 random bytes
+    deliver(id, nonce || crypto_box_seal(K, buyerPubKey) || secretbox(canonical(bundle), nonce, K))
+
+on Settled(id) or Refunded(id):
+    withdraw()
+```
+
+Failure modes you must handle: the buyer rejects your sample (bond returned, bounty reopens, you keep
+a reputation mark); you miss `deliverBy` (bond slashed in full to the buyer); the blockhash expires
+before you reveal (withdraw the commit at a 10% penalty). Every deadline is also callable by anyone
+via `finalize(id)`, so an abandoned bounty never locks funds.
 
 ## Reference-implementation choices (not part of the protocol)
 
