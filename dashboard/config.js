@@ -2,7 +2,7 @@
 window.EVALBOUNTY_CONFIG = {
   chainId: 11155111,
   contractAddress: "0x6b7f34fa4229aa9545b08c47d187415505c0e7a8",
-  arbitratorAddress: "0x5d16caa1e9789a996839aa44a4167b574b887653",
+  arbitratorAddress: "0x522A3853bAe72170BE0dCA60D141329bC5AfD7f0",
   deployBlock: 11679290,
   rpcUrl: "https://ethereum-sepolia-rpc.publicnode.com",
   explorerBase: "https://sepolia.etherscan.io",

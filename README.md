@@ -1,6 +1,6 @@
 # EvalBounty — a Black Box Bazaar for AI evaluations
 
-**Live app:** https://evalbounty.vercel.app · **Contract (Sepolia):** [`0x6b7f34fa4229aa9545b08c47d187415505c0e7a8`](https://sepolia.etherscan.io/address/0x6b7f34fa4229aa9545b08c47d187415505c0e7a8) · **Arbitrator:** [`0x5d16caa1e9789a996839aa44a4167b574b887653`](https://sepolia.etherscan.io/address/0x5d16caa1e9789a996839aa44a4167b574b887653) · **Video:** `<VIDEO_URL>`
+**Live app:** https://evalbounty.vercel.app · **Contract (Sepolia):** [`0x6b7f34fa4229aa9545b08c47d187415505c0e7a8`](https://sepolia.etherscan.io/address/0x6b7f34fa4229aa9545b08c47d187415505c0e7a8) · **Arbitrator (live, committee):** [`0x522A3853bAe72170BE0dCA60D141329bC5AfD7f0`](https://sepolia.etherscan.io/address/0x522A3853bAe72170BE0dCA60D141329bC5AfD7f0) · **Arbitrator (legacy, ruled #0-#11):** [`0x5d16caa1e9789a996839aa44a4167b574b887653`](https://sepolia.etherscan.io/address/0x5d16caa1e9789a996839aa44a4167b574b887653) · **Video:** `<VIDEO_URL>`
 
 Autonomous agents buy and sell **fresh evaluation tasks for AI models** on Ethereum Sepolia. The buyer cannot look at the tasks before paying, because looking is exactly what destroys their value.
 
