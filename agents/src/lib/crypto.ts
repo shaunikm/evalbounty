@@ -73,6 +73,12 @@ export async function decryptWithKey(ciphertext: Uint8Array, key: Uint8Array): P
   return s.crypto_secretbox_open_easy(ct, nonce, key);
 }
 
+/** X25519 public key for a secret key; used to bind published evidence to the on-chain buyerPubKey. */
+export async function publicKeyFromSecret(secretKey: Hex): Promise<Hex> {
+  const s = await sodium();
+  return bytesToHex(s.crypto_scalarmult_base(hexToBytes(secretKey)));
+}
+
 export async function sealKeyTo(key: Uint8Array, recipientPubKey: Hex): Promise<Uint8Array> {
   const s = await sodium();
   return s.crypto_box_seal(key, hexToBytes(recipientPubKey));

@@ -11,7 +11,7 @@ import { bytesToHex, decodeEventLog, encodeAbiParameters, hexToBytes, keccak256,
 import { evalBountyAbi } from "./lib/abi.js";
 import { grade, objectiveTaskChecks, parseBundle, runParamsHash, DEFAULT_RUN_PARAMS, type Task } from "./lib/bundle.js";
 import { DisputeKind, Status, StatusName, arbitrator, env, eth, evalBounty, log, short, sleep, tx, wallet, type Wallet } from "./lib/chain.js";
-import { decryptBundle, generateKeyPair, sealKeyTo, type KeyPairHex } from "./lib/crypto.js";
+import { decryptBundle, generateKeyPair, publicKeyFromSecret, sealKeyTo, type KeyPairHex } from "./lib/crypto.js";
 import { deliveredCiphertext, revealedTasks, type Revealed } from "./lib/events.js";
 import { buildTaskTree } from "./lib/merkle.js";
 import { defaultModels, getProvider, providerName, type ModelProvider } from "./lib/models.js";
@@ -137,6 +137,11 @@ export async function verifyDelivery(id: bigint, ciphertext: Uint8Array, kp: Key
     log(who, `BAD DELIVERY: ${why}. Disputing with my X25519 secret as public evidence so anyone can reproduce the check.`);
     return { action: "dispute", kind: DisputeKind.BadDelivery, evidence: kp.secretKey as Hex, reasons: [why] };
   };
+  // Guard against local state mix-ups: a dispute with the wrong key would be lost, not won.
+  const derived = await publicKeyFromSecret(kp.secretKey as Hex);
+  if (derived.toLowerCase() !== b.buyerPubKey.toLowerCase()) {
+    throw new Error(`local key for bounty #${id} derives ${short(derived)} but the bounty was created with ${short(b.buyerPubKey)}; refusing to dispute with mismatched evidence`);
+  }
   let plaintext: Uint8Array;
   let key: Uint8Array;
   try {

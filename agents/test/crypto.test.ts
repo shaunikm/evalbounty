@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { decryptBundle, decryptWithKey, encryptBundle, generateKeyPair, openSealedKey, sealKeyTo, NONCE_BYTES, SEALED_KEY_BYTES } from "../src/lib/crypto.js";
+import { decryptBundle, decryptWithKey, encryptBundle, generateKeyPair, openSealedKey, publicKeyFromSecret, sealKeyTo, NONCE_BYTES, SEALED_KEY_BYTES } from "../src/lib/crypto.js";
 
 describe("hybrid encryption", () => {
   it("round-trips to the recipient and to a third party holding K", async () => {
@@ -27,5 +27,11 @@ describe("hybrid encryption", () => {
     const sealed = await sealKeyTo(key, arbiter.publicKey);
     expect(sealed.length).toBe(SEALED_KEY_BYTES);
     expect(Buffer.from(await openSealedKey(sealed, arbiter))).toEqual(Buffer.from(key));
+  });
+  it("derives the public key from the secret (binds dispute evidence to the on-chain key)", async () => {
+    const kp = await generateKeyPair();
+    const other = await generateKeyPair();
+    expect((await publicKeyFromSecret(kp.secretKey)).toLowerCase()).toBe(kp.publicKey.toLowerCase());
+    expect((await publicKeyFromSecret(other.secretKey)).toLowerCase()).not.toBe(kp.publicKey.toLowerCase());
   });
 });

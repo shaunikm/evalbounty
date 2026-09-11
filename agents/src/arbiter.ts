@@ -12,7 +12,7 @@
 import { bytesToHex, decodeAbiParameters, keccak256, type Hex } from "viem";
 import { parseBundle, runParamsHash } from "./lib/bundle.js";
 import { DisputeKind, Ruling, Status, StatusName, arbitrator, env, evalBounty, log, publicClient, short, sleep, tx, wallet, type Wallet } from "./lib/chain.js";
-import { decryptBundle, decryptWithKey, openSealedKey, type KeyPairHex } from "./lib/crypto.js";
+import { decryptBundle, decryptWithKey, openSealedKey, publicKeyFromSecret, type KeyPairHex } from "./lib/crypto.js";
 import { deliveredCiphertext, disputedEvents, latestDispute } from "./lib/events.js";
 import { buildTaskTree } from "./lib/merkle.js";
 import { getProvider, type ModelProvider } from "./lib/models.js";
@@ -41,6 +41,16 @@ export async function arbitrate(id: bigint, provider: ModelProvider, arbiterKp: 
 
   if (d.kind === DisputeKind.BadDelivery) {
     log(who, `#${id} BadDelivery dispute: buyer published its X25519 secret; anyone can redo this check`);
+    // The evidence must be THE buyer's key: a wrong secret would make any good ciphertext "fail to open".
+    let derived: Hex;
+    try {
+      derived = await publicKeyFromSecret(d.evidence);
+    } catch (e) {
+      return forSeller(`evidence is not a valid X25519 secret key (${(e as Error).message})`);
+    }
+    if (derived.toLowerCase() !== b.buyerPubKey.toLowerCase()) {
+      return forSeller(`published secret derives ${short(derived)}, not the bounty's buyer key ${short(b.buyerPubKey)}; evidence is not bound to this bounty`);
+    }
     let plaintext: Uint8Array;
     try {
       ({ plaintext } = await decryptBundle(ciphertext, { publicKey: b.buyerPubKey, secretKey: d.evidence }));
