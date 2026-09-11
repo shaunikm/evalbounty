@@ -40,7 +40,9 @@ agents/                    Node 20+/TypeScript (tsx, viem, vitest). pnpm workspa
   src/lib/generators.ts    procedural task families with computed references (arith, modular, date, strings, units, sequence) + junk
   src/lib/merkle.ts        OZ StandardMerkleTree (uint256,bytes32) + sampleIndicesFor (mirrors Solidity byte-for-byte)
   src/lib/crypto.ts        libsodium: secretbox + crypto_box_seal; wire = nonce(24)||sealedK(80)||ct
-  src/lib/models.ts        providers: mock (deterministic, keyless) | anthropic | openai; NULL policy = "0"
+  src/lib/models.ts        providers: mock (deterministic, keyless) | anthropic | openai; NULL policy = "0";
+                           paid providers wrapped in withBudget (MODEL_CALL_BUDGET, default 3000 calls/process);
+                           openai pair = gpt-4.1-nano-2025-04-14 (weak) vs gpt-5-nano-2025-08-07 (strong, low effort)
   src/lib/verify.ts        measureBundle → transcript, claimsHold, resampling SE (Miller 2024), transcriptHash
   src/lib/chain.ts         viem clients, env, contract handles, tx helper, logging
   src/lib/abi.ts           GENERATED from contracts/out by `pnpm gen-abi` (do not edit)
@@ -117,6 +119,17 @@ nonce++ until k distinct. Leaf = `keccak256(bytes.concat(keccak256(abi.encode(in
 - **Parallels, not dependencies:** ERC-8183 (client funds → provider submits → evaluator completes/rejects
   → expiry) matches our lifecycle shape; ERC-8004 registries exist on Sepolia (Identity
   0x8004A818BFB912233c491871b3d84c89A494BD9e, Reputation 0x8004B663056A597Dffe9eCcC1965A193B7388713) — optional bonus.
+
+## Secrets and spend (Shaunik's OpenAI credits)
+
+- Keys live only in `agents/.env` (gitignored, mode 600), entered via `scripts/set-keys.sh`. The dashboard is
+  static and ships no keys; `scripts/check-no-secrets.sh` must pass before any push or Vercel deploy.
+- Only the locally running buyer/arbiter agents call paid models. The one spend vector is a stranger
+  committing to an open bounty while the buyer *loop* is running (the buyer then reruns claims on their
+  delivery, ~200 calls). Mitigations: per-process call budget, prefer the scripted `demo` over long-running
+  loops when not recording, small N/runs in `defaultBuyerConfig`.
+- Deployed: EvalBounty 0x6b7f34fa4229aa9545b08c47d187415505c0e7a8, CentralizedArbitrator
+  0x5d16caa1e9789a996839aa44a4167b574b887653, Sepolia block 11679290.
 
 ## Known limitations (say them out loud)
 

@@ -1,6 +1,6 @@
 # EvalBounty — a Black Box Bazaar for AI evaluations
 
-**Live app:** `<DASHBOARD_URL>` (Vercel) · **Contract (Sepolia):** [`<EVALBOUNTY_ADDRESS>`](https://sepolia.etherscan.io/address/<EVALBOUNTY_ADDRESS>) · **Arbitrator:** [`<ARBITRATOR_ADDRESS>`](https://sepolia.etherscan.io/address/<ARBITRATOR_ADDRESS>) · **Video:** `<VIDEO_URL>`
+**Live app:** `<DASHBOARD_URL>` (Vercel) · **Contract (Sepolia):** [`0x6b7f34fa4229aa9545b08c47d187415505c0e7a8`](https://sepolia.etherscan.io/address/0x6b7f34fa4229aa9545b08c47d187415505c0e7a8) · **Arbitrator:** [`0x5d16caa1e9789a996839aa44a4167b574b887653`](https://sepolia.etherscan.io/address/0x5d16caa1e9789a996839aa44a4167b574b887653) · **Video:** `<VIDEO_URL>`
 
 Autonomous agents buy and sell **fresh evaluation tasks for AI models** on Ethereum Sepolia. The buyer cannot look at the tasks before paying, because looking is exactly what destroys their value.
 
@@ -27,7 +27,7 @@ Reputation counters (commits, rejected samples, abandoned commits, deliveries, t
 ## 3. Trust assumptions
 
 - **The arbitrator is a single bonded party** (a `CentralizedArbitrator` implementing Kleros' ERC-792 interface). It only touches funds during a dispute; a missed ruling deadline splits the reward 50/50 and returns bonds. Production would plug in a court, a committee, or TEE-attested reruns through the same interface.
-- **The model provider is a faithful oracle** for the pinned snapshot and sees the prompts. Reruns are noisy, so claims are bands with a tolerance the buyer sets ≥ 2·SE (Miller, *Adding Error Bars to Evals*, 2024). The demo uses a deterministic mock provider so results reproduce exactly; `MODEL_PROVIDER=anthropic|openai` switches to real models.
+- **The model provider is a faithful oracle** for the pinned snapshot and sees the prompts. Reruns are noisy, so claims are bands with a tolerance the buyer sets ≥ 2·SE (Miller, *Adding Error Bars to Evals*, 2024). `MODEL_PROVIDER=mock` is a deterministic keyless provider used by the tests; the Sepolia demo runs `MODEL_PROVIDER=openai` with pinned snapshots `gpt-4.1-nano-2025-04-14` (weak, no reasoning) and `gpt-5-nano-2025-08-07` (strong, reasoning at low effort), the cheapest pair with a real capability gap. Paid providers are wrapped in a per-process call budget (`MODEL_CALL_BUDGET`, default 3000) so no loop or hostile counterparty can drain credits.
 - **`blockhash` is an unbiased source of randomness at demo stakes.** A block proposer can bias it by one bit; at higher stakes use a VRF. This is also why the contract lives on Sepolia L1: Arbitrum documents its blockhash as "cryptographically insecure, pseudo-random" and returns a constant for `prevrandao`.
 - **Buyers can resell after purchase.** Exclusivity is a contract term backed by reputation, not cryptography.
 
@@ -59,4 +59,6 @@ OpenZeppelin `MerkleProof` + `@openzeppelin/merkle-tree` (leaf format `keccak256
 
 ## Layout
 
-`contracts/` Foundry (EvalBounty, CentralizedArbitrator, tests) · `agents/` TypeScript buyer/seller/arbiter + libs + e2e · `dashboard/` static GitHub Pages app · `CLAUDE.md` architecture notes.
+`contracts/` Foundry (EvalBounty, CentralizedArbitrator, tests) · `agents/` TypeScript buyer/seller/arbiter + libs + e2e · `dashboard/` static app (Vercel) · `scripts/` set-keys, go-live, verify, check-no-secrets · `CLAUDE.md` architecture notes.
+
+Deployed on Sepolia at block 11679290. Source is verified on [Etherscan](https://sepolia.etherscan.io/address/0x6b7f34fa4229aa9545b08c47d187415505c0e7a8#code) and [Blockscout](https://eth-sepolia.blockscout.com/address/0x6b7f34fa4229aa9545b08c47d187415505c0e7a8?tab=contract).

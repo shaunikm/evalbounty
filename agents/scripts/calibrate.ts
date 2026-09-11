@@ -1,5 +1,6 @@
 // Measure real-model scores per difficulty and family to choose the demo band.
 //   pnpm --filter agents calibrate -- 1,3 1        (difficulties, runs)
+import "../src/lib/chain.js"; // loads agents/.env
 import { bundleCommitment, DEFAULT_RUN_PARAMS, type Bundle } from "../src/lib/bundle.js";
 import { generateTasks } from "../src/lib/generators.js";
 import { defaultModels, getProvider, providerName } from "../src/lib/models.js";
