@@ -4,12 +4,24 @@ Deadline: **Thursday 2026-09-11, 2:00 PM** via the B@B Google Form (link in the 
 
 ## Checklist
 
-- [ ] Deployer funded → `CHAIN=sepolia pnpm --filter agents deploy` (writes addresses into `agents/.env` and `dashboard/config.js`)
-- [ ] `./scripts/verify-sepolia.sh` (Sourcify + Blockscout keyless; add `ETHERSCAN_API_KEY=` for the Etherscan "Contract" tab)
-- [ ] `pnpm --filter agents demo` once end-to-end on Sepolia (≈ 8–10 min at 12 s blocks) so the dashboard has real history
-- [ ] Fill `<EVALBOUNTY_ADDRESS>`, `<ARBITRATOR_ADDRESS>`, `<VIDEO_URL>` in `README.md`
-- [ ] Repo public, GitHub Pages enabled (Settings → Pages → Source: GitHub Actions; the `pages` workflow deploys `dashboard/`)
-- [ ] Record the video (≤ 5 min, unpolished is fine), upload (YouTube unlisted / Drive), paste URL in README
+- [x] Contracts deployed on Sepolia: EvalBounty `0x6b7f34fa4229aa9545b08c47d187415505c0e7a8`, CentralizedArbitrator `0x5d16caa1e9789a996839aa44a4167b574b887653` (block 11679290), agents funded
+- [x] Source verified on Etherscan, Blockscout and Sourcify (`./scripts/verify-sepolia.sh`)
+- [x] Keys entered with `./scripts/set-keys.sh`; demo runs on OpenAI `gpt-4.1-nano-2025-04-14` vs `gpt-5-nano-2025-08-07`
+- [ ] `pnpm --filter agents demo` on Sepolia (all four stories) so the dashboard has real history
+- [ ] **Vercel** (your login is required, one time):
+  ```bash
+  npx vercel login
+  ```
+  ```bash
+  npx vercel --prod
+  ```
+  When asked for a project name, pick something unique like `evalbounty-bab` (`technical-interview.vercel.app` is taken by
+  someone else). The public URL is `https://<project>.vercel.app`. If it shows a Vercel login page, open the project on
+  vercel.com → Settings → Deployment Protection and switch Vercel Authentication off. Re-run `npx vercel --prod` after any
+  dashboard change or contract redeploy (config.js is committed and served with no-cache).
+- [ ] Paste the Vercel URL into README.md (`<DASHBOARD_URL>`) and the form
+- [ ] `git push`, make the repo public (GitHub → Settings → General → Danger Zone → Change visibility) — tell Claude to do it, or do it yourself
+- [ ] Record the video (≤ 5 min), upload (YouTube unlisted / Drive), paste URL into README.md (`<VIDEO_URL>`)
 - [ ] Submit: repo URL, dashboard URL, contract address + Etherscan link, video URL
 
 ## Video shot list (target 4:30)
@@ -20,7 +32,7 @@ Run `pnpm --filter agents demo` in one terminal and keep the dashboard open in a
 |---|---|---|
 | 0:00 | Dashboard hero | "EvalBounty is a market for fresh AI evaluation tasks. The buyer can't look before paying because looking is contamination, so the market has to enforce value without disclosure." |
 | 0:30 | Terminal: `createBounty` tx, dashboard row appears Open | "The buyer agent declares value up front: 30 tasks, reveal 4, a weak model must score ≤ 35 %, a strong one ≥ 65 %, a trivial policy ≤ 5 %, all on pinned model ids with committed run params. That's checkable by anyone with the bundle." |
-| 1:00 | Seller log: measure → tune → commit | "The seller generates tasks with computed answer keys, measures the band, tunes difficulty until it fits, and commits a Merkle root plus a bond of half the reward." |
+| 1:00 | Seller log: measure → tune → commit | "The seller generates tasks with computed answer keys and measures them on the two pinned models: gpt-4.1-nano gets about 1 %, the reasoning gpt-5-nano about 85 %. That's inside the band, so it commits a Merkle root plus a bond of half the reward." |
 | 1:30 | Seller log: `blockhash(n) picked tasks [...]`; dashboard: revealed sample | "The next block's hash picks which 4 tasks are shown. The seller committed before that hash existed, so it can't cherry-pick. A 30 %-junk bundle survives this 24 % of the time." |
 | 2:00 | Buyer log: objective checks, `strong model solved 4/4`, approve | "The buyer checks the sample is well-posed and that the strong model can actually solve some of it, then approves." |
 | 2:20 | Seller: encrypt + deliver; Buyer: decrypt, keccak matches, root matches, rerun, accept; dashboard: Settled, reputation updates | "Delivery is encrypted to a per-bounty key and lives in the event log. The buyer decrypts, verifies it is exactly the committed bundle, re-runs all three claims, and accepts. Settlement is a pull-payment with a 2 % fee." |

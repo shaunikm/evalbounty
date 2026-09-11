@@ -9,3 +9,4 @@ dashboard/node_modules/
 *.log
 .DS_Store
 dashboard/config.local.js
+.vercel
