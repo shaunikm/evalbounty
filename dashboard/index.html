@@ -5,133 +5,480 @@
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>EvalBounty — Black Box Bazaar for AI evals</title>
 <meta name="description" content="A sealed marketplace on Ethereum Sepolia where agents buy and sell hidden AI evaluation tasks. Commit, random sample, encrypted delivery, reproducible claims, arbitration." />
+<meta name="color-scheme" content="dark light" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" />
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230a0a0a'/%3E%3Cpath d='M16 6l9 5v10l-9 5-9-5V11z' fill='none' stroke='%23ededed' stroke-width='2'/%3E%3Cpath d='M16 16l9-5M16 16v10M16 16l-9-5' stroke='%23ededed' stroke-width='2'/%3E%3C/svg%3E" />
+<script>
+  // Theme before first paint: explicit choice wins, otherwise the OS setting.
+  try { const t = localStorage.getItem("eb-theme"); if (t === "light" || t === "dark") document.documentElement.dataset.theme = t; } catch {}
+</script>
 <style>
+  /* ---------- Geist tokens ---------- */
   :root {
-    --bg: #0b0f14; --panel: #121821; --panel-2: #0f141c; --border: #1f2a37; --text: #e6edf3; --muted: #8b98a8;
-    --accent: #7dd3fc; --ok: #4ade80; --warn: #fbbf24; --bad: #f87171; --violet: #c4b5fd; --mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+    color-scheme: light;
+    --bg-100: #ffffff; --bg-200: #fafafa;
+    --gray-100: #f2f2f2; --gray-200: #ebebeb; --gray-300: #e6e6e6; --gray-400: #ebebeb; --gray-500: #c9c9c9;
+    --gray-600: #a8a8a8; --gray-700: #8f8f8f; --gray-800: #7d7d7d; --gray-900: #666666; --gray-1000: #171717;
+    --gray-a200: rgba(0,0,0,.05); --gray-a400: rgba(0,0,0,.08); --gray-a500: rgba(0,0,0,.14);
+    --blue-100: #f0f7ff; --blue-300: #e1f0ff; --blue-500: #99ceff; --blue-700: #0070f3; --blue-900: #0067d6; --blue-1000: #00254d;
+    --red-100: #fff0f0; --red-300: #ffe5e5; --red-700: #e5484d; --red-900: #cb2a2f; --red-1000: #381316;
+    --amber-100: #fff6e5; --amber-300: #ffecbc; --amber-700: #ffb224; --amber-900: #a35200; --amber-1000: #4e2009;
+    --green-100: #effbef; --green-300: #d3f5d8; --green-700: #45a557; --green-900: #297a3a; --green-1000: #18311e;
+    --teal-100: #e6fffa; --teal-300: #c5f8ee; --teal-700: #12a594; --teal-900: #067a6e; --teal-1000: #04312c;
+    --purple-100: #f9f1fe; --purple-300: #f0dfff; --purple-700: #8e4ec6; --purple-900: #7820bc; --purple-1000: #2e0b47;
+    /* chart series (validated: adjacent-pair CVD ΔE ≥ 13, all ≥ 3:1) */
+    --s-bounty: #0070f3; --s-commit: #c98500; --s-delivery: #12a594; --s-dispute: #8e4ec6; --s-settle: #297a3a; --s-admin: #a8a8a8;
+    --shadow-sm: 0 0 0 1px var(--gray-a400), 0 1px 2px rgba(0,0,0,.04);
+    --shadow-md: 0 0 0 1px var(--gray-a400), 0 8px 24px rgba(0,0,0,.08);
+    --hero-line: rgba(0,0,0,.06);
+    --sans: "Geist", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --mono: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
   }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --bg-100: #0a0a0a; --bg-200: #000000;
+    --gray-100: #1a1a1a; --gray-200: #1f1f1f; --gray-300: #292929; --gray-400: #2e2e2e; --gray-500: #454545;
+    --gray-600: #878787; --gray-700: #8f8f8f; --gray-800: #7d7d7d; --gray-900: #a1a1a1; --gray-1000: #ededed;
+    --gray-a200: rgba(255,255,255,.06); --gray-a400: rgba(255,255,255,.10); --gray-a500: rgba(255,255,255,.16);
+    --blue-100: #0f1b2d; --blue-300: #0f3058; --blue-500: #0a4481; --blue-700: #0070f3; --blue-900: #52a8ff; --blue-1000: #eaf6ff;
+    --red-100: #2a1314; --red-300: #551a1e; --red-700: #e5484d; --red-900: #ff6166; --red-1000: #ffecee;
+    --amber-100: #271700; --amber-300: #4a2900; --amber-700: #ffb224; --amber-900: #ff990a; --amber-1000: #fef3dd;
+    --green-100: #0b2211; --green-300: #113123; --green-700: #46a758; --green-900: #63c174; --green-1000: #e5fbeb;
+    --teal-100: #04201b; --teal-300: #083932; --teal-700: #12a594; --teal-900: #0ac5b3; --teal-1000: #e1faf4;
+    --purple-100: #231528; --purple-300: #3a1e4d; --purple-700: #8e4ec6; --purple-900: #bf7af0; --purple-1000: #f9f1fe;
+    --s-settle: #46a758; --s-admin: #878787;
+    --shadow-sm: 0 0 0 1px var(--gray-a400);
+    --shadow-md: 0 0 0 1px var(--gray-a400), 0 12px 32px rgba(0,0,0,.5);
+    --hero-line: rgba(255,255,255,.07);
+  } }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --bg-100: #0a0a0a; --bg-200: #000000;
+    --gray-100: #1a1a1a; --gray-200: #1f1f1f; --gray-300: #292929; --gray-400: #2e2e2e; --gray-500: #454545;
+    --gray-600: #878787; --gray-700: #8f8f8f; --gray-800: #7d7d7d; --gray-900: #a1a1a1; --gray-1000: #ededed;
+    --gray-a200: rgba(255,255,255,.06); --gray-a400: rgba(255,255,255,.10); --gray-a500: rgba(255,255,255,.16);
+    --blue-100: #0f1b2d; --blue-300: #0f3058; --blue-500: #0a4481; --blue-700: #0070f3; --blue-900: #52a8ff; --blue-1000: #eaf6ff;
+    --red-100: #2a1314; --red-300: #551a1e; --red-700: #e5484d; --red-900: #ff6166; --red-1000: #ffecee;
+    --amber-100: #271700; --amber-300: #4a2900; --amber-700: #ffb224; --amber-900: #ff990a; --amber-1000: #fef3dd;
+    --green-100: #0b2211; --green-300: #113123; --green-700: #46a758; --green-900: #63c174; --green-1000: #e5fbeb;
+    --teal-100: #04201b; --teal-300: #083932; --teal-700: #12a594; --teal-900: #0ac5b3; --teal-1000: #e1faf4;
+    --purple-100: #231528; --purple-300: #3a1e4d; --purple-700: #8e4ec6; --purple-900: #bf7af0; --purple-1000: #f9f1fe;
+    --s-settle: #46a758; --s-admin: #878787;
+    --shadow-sm: 0 0 0 1px var(--gray-a400);
+    --shadow-md: 0 0 0 1px var(--gray-a400), 0 12px 32px rgba(0,0,0,.5);
+    --hero-line: rgba(255,255,255,.07);
+  }
+
+  /* ---------- base ---------- */
   * { box-sizing: border-box; }
-  body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
-  a { color: var(--accent); text-decoration: none; } a:hover { text-decoration: underline; }
-  code, .mono { font-family: var(--mono); font-size: 0.92em; }
-  header { padding: 40px 24px 20px; max-width: 1180px; margin: 0 auto; }
-  h1 { margin: 0 0 6px; font-size: 30px; letter-spacing: -0.02em; }
-  h1 small { color: var(--muted); font-weight: 400; font-size: 16px; margin-left: 8px; }
-  .lede { color: var(--muted); max-width: 900px; margin: 6px 0 18px; font-size: 16px; }
-  .steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; margin: 16px 0 6px; }
-  .step { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; }
-  .step b { display: block; color: var(--accent); font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 4px; }
-  .step span { color: var(--muted); font-size: 13px; }
-  main { max-width: 1180px; margin: 0 auto; padding: 0 24px 60px; display: grid; gap: 22px; }
-  section { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 18px 20px; }
-  section h2 { margin: 0 0 12px; font-size: 17px; display: flex; align-items: center; gap: 10px; }
-  section h2 .sub { color: var(--muted); font-weight: 400; font-size: 13px; }
-  .statusbar { display: flex; flex-wrap: wrap; gap: 18px; align-items: center; color: var(--muted); font-size: 13px; }
-  .statusbar .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--ok); display: inline-block; margin-right: 6px; box-shadow: 0 0 8px var(--ok); }
-  .pill { display: inline-block; padding: 2px 9px; border-radius: 999px; font-size: 12px; font-weight: 600; letter-spacing: 0.02em; border: 1px solid transparent; }
-  .s-Open { color: var(--accent); border-color: var(--accent); }
-  .s-Committed, .s-Sampled, .s-Approved, .s-Delivered { color: var(--warn); border-color: var(--warn); }
-  .s-Disputed { color: var(--bad); border-color: var(--bad); }
-  .s-Settled { color: var(--ok); border-color: var(--ok); }
-  .s-Refunded { color: var(--violet); border-color: var(--violet); }
-  .s-Cancelled { color: var(--muted); border-color: var(--muted); }
-  table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
-  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
-  th { color: var(--muted); font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; }
-  tr.bounty { cursor: pointer; } tr.bounty:hover { background: var(--panel-2); }
-  tr.detail td { background: var(--panel-2); padding: 14px 16px; }
-  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; } @media (max-width: 900px) { .grid2 { grid-template-columns: 1fr; } }
-  .timeline { list-style: none; margin: 0; padding: 0; }
-  .timeline li { padding: 5px 0 5px 16px; border-left: 2px solid var(--border); position: relative; font-size: 13px; }
-  .timeline li::before { content: ""; position: absolute; left: -5px; top: 11px; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
-  .timeline .t { color: var(--muted); font-family: var(--mono); font-size: 11.5px; margin-right: 8px; }
-  .task { background: #0b1017; border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; margin: 8px 0; font-size: 13px; }
-  .task .idx { color: var(--violet); font-family: var(--mono); }
-  .task .ref { color: var(--ok); font-family: var(--mono); }
-  .band { font-family: var(--mono); font-size: 12.5px; color: var(--muted); }
-  .log { max-height: 420px; overflow: auto; font-family: var(--mono); font-size: 12.5px; line-height: 1.55; }
-  .log div { padding: 3px 0; border-bottom: 1px dashed #18212c; }
-  .log .who { color: var(--accent); }
-  .muted { color: var(--muted); } .ok { color: var(--ok); } .bad { color: var(--bad); } .warn { color: var(--warn); }
-  .kv { display: grid; grid-template-columns: 150px 1fr; gap: 4px 12px; font-size: 13px; }
-  .kv b { color: var(--muted); font-weight: 500; }
-  .empty { color: var(--muted); font-style: italic; padding: 10px 0; }
-  footer { max-width: 1180px; margin: 0 auto; padding: 0 24px 40px; color: var(--muted); font-size: 13px; }
-  .limitation { border-left: 3px solid var(--warn); padding: 8px 12px; background: var(--panel-2); border-radius: 6px; margin-top: 14px; }
+  html { -webkit-text-size-adjust: 100%; }
+  body { margin: 0; background: var(--bg-200); color: var(--gray-1000); font-family: var(--sans); font-size: 14px; line-height: 20px; font-feature-settings: "cv11", "ss01"; -webkit-font-smoothing: antialiased; }
+  a { color: inherit; text-decoration: none; }
+  a.link { color: var(--blue-900); } a.link:hover { text-decoration: underline; text-underline-offset: 3px; }
+  code, .mono { font-family: var(--mono); font-size: 13px; }
+  button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; }
+  [hidden] { display: none !important; }
+  .wrap { max-width: 1200px; margin: 0 auto; padding: 0 24px; }
+  .muted { color: var(--gray-900); } .faint { color: var(--gray-700); }
+  .ok { color: var(--green-900); } .bad { color: var(--red-900); } .warn { color: var(--amber-900); }
+  h1, h2, h3 { margin: 0; letter-spacing: -0.02em; font-weight: 600; }
+  .h48 { font-size: 48px; line-height: 56px; letter-spacing: -0.04em; font-weight: 600; }
+  .h24 { font-size: 24px; line-height: 32px; letter-spacing: -0.03em; }
+  .h16 { font-size: 16px; line-height: 24px; letter-spacing: -0.01em; }
+  .label-12 { font-size: 12px; line-height: 16px; } .label-13 { font-size: 13px; line-height: 18px; }
+  .copy-16 { font-size: 16px; line-height: 24px; } .copy-13 { font-size: 13px; line-height: 18px; }
+  .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+
+  /* ---------- top bar ---------- */
+  .topbar { position: sticky; top: 0; z-index: 20; background: color-mix(in srgb, var(--bg-100) 82%, transparent); backdrop-filter: saturate(180%) blur(12px); -webkit-backdrop-filter: saturate(180%) blur(12px); border-bottom: 1px solid var(--gray-a400); }
+  .topbar .wrap { display: flex; align-items: center; gap: 20px; height: 56px; }
+  .brand { display: flex; align-items: center; gap: 10px; font-weight: 600; letter-spacing: -0.01em; }
+  .brand svg { width: 24px; height: 24px; }
+  .badge { display: inline-flex; align-items: center; gap: 6px; height: 22px; padding: 0 8px; border-radius: 999px; font-size: 12px; line-height: 16px; font-weight: 500; background: var(--gray-100); color: var(--gray-900); border: 1px solid var(--gray-a400); white-space: nowrap; }
+  .badge.blue { background: var(--blue-100); color: var(--blue-900); border-color: transparent; }
+  .badge.green { background: var(--green-100); color: var(--green-900); border-color: transparent; }
+  .badge.amber { background: var(--amber-100); color: var(--amber-900); border-color: transparent; }
+  .badge.red { background: var(--red-100); color: var(--red-900); border-color: transparent; }
+  .badge.purple { background: var(--purple-100); color: var(--purple-900); border-color: transparent; }
+  .badge.teal { background: var(--teal-100); color: var(--teal-900); border-color: transparent; }
+  .badge.gray { background: var(--gray-100); color: var(--gray-900); }
+  .nav { display: flex; gap: 2px; margin-left: auto; align-items: center; }
+  .nav a, .nav button { display: inline-flex; align-items: center; gap: 5px; height: 32px; padding: 0 10px; border-radius: 6px; color: var(--gray-900); font-size: 14px; }
+  .nav a:hover, .nav button:hover { background: var(--gray-a200); color: var(--gray-1000); }
+  .nav svg { width: 14px; height: 14px; }
+  .live { display: inline-flex; align-items: center; gap: 7px; height: 32px; padding: 0 10px 0 8px; border-radius: 6px; border: 1px solid var(--gray-a400); background: var(--bg-100); font-family: var(--mono); font-size: 12px; color: var(--gray-900); white-space: nowrap; }
+  .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--green-700); box-shadow: 0 0 0 3px color-mix(in srgb, var(--green-700) 25%, transparent); }
+  .dot.bad { background: var(--red-700); box-shadow: 0 0 0 3px color-mix(in srgb, var(--red-700) 25%, transparent); }
+  .dot.wait { background: var(--amber-700); box-shadow: 0 0 0 3px color-mix(in srgb, var(--amber-700) 25%, transparent); animation: pulse 1.2s ease-in-out infinite; }
+  @keyframes pulse { 50% { opacity: .35; } }
+  .icon-btn { width: 32px; height: 32px; display: inline-flex; align-items: center; justify-content: center; border-radius: 6px; border: 1px solid var(--gray-a400); background: var(--bg-100); color: var(--gray-900); }
+  .icon-btn:hover { color: var(--gray-1000); background: var(--gray-100); }
+  .icon-btn svg { width: 15px; height: 15px; }
+  :root[data-theme="light"] .i-moon, :root:not([data-theme="dark"]) .i-moon { display: block; }
+  :root[data-theme="light"] .i-sun, :root:not([data-theme="dark"]) .i-sun { display: none; }
+  :root[data-theme="dark"] .i-moon { display: none; } :root[data-theme="dark"] .i-sun { display: block; }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .i-moon { display: none; } :root:not([data-theme="light"]) .i-sun { display: block; } }
+
+  /* ---------- hero (Geist grid) ---------- */
+  .hero { position: relative; border-bottom: 1px solid var(--gray-a400); background: var(--bg-100); overflow: hidden; }
+  .hero::before { content: ""; position: absolute; inset: 0; background-image: linear-gradient(var(--hero-line) 1px, transparent 1px), linear-gradient(90deg, var(--hero-line) 1px, transparent 1px); background-size: 72px 72px; background-position: center top; mask-image: radial-gradient(ellipse 80% 90% at 50% 0%, #000 30%, transparent 100%); -webkit-mask-image: radial-gradient(ellipse 80% 90% at 50% 0%, #000 30%, transparent 100%); pointer-events: none; }
+  .hero .wrap { position: relative; display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(320px, .9fr); gap: 40px; padding-top: 56px; padding-bottom: 48px; align-items: center; }
+  .hero .cross { position: absolute; width: 17px; height: 17px; pointer-events: none; }
+  .hero .cross::before, .hero .cross::after { content: ""; position: absolute; background: var(--gray-500); }
+  .hero .cross::before { left: 8px; top: 0; width: 1px; height: 17px; } .hero .cross::after { top: 8px; left: 0; height: 1px; width: 17px; }
+  .eyebrow { display: inline-flex; align-items: center; gap: 8px; margin-bottom: 18px; }
+  .hero h1 { max-width: 640px; }
+  .hero h1 .dim { color: var(--gray-700); font-weight: 500; }
+  .lede { margin: 18px 0 24px; max-width: 600px; color: var(--gray-900); }
+  .lede b { color: var(--gray-1000); font-weight: 500; }
+  .cta { display: flex; flex-wrap: wrap; gap: 10px; }
+  .btn { display: inline-flex; align-items: center; gap: 7px; height: 40px; padding: 0 16px; border-radius: 6px; font-weight: 500; font-size: 14px; border: 1px solid var(--gray-a500); background: var(--bg-100); color: var(--gray-1000); transition: background .12s, border-color .12s; }
+  .btn:hover { background: var(--gray-100); border-color: var(--gray-600); }
+  .btn.primary { background: var(--gray-1000); color: var(--bg-100); border-color: var(--gray-1000); }
+  .btn.primary:hover { background: var(--gray-900); border-color: var(--gray-900); }
+  .btn svg { width: 14px; height: 14px; }
+  .status-card { background: var(--bg-100); border-radius: 12px; box-shadow: var(--shadow-md); padding: 18px 20px; }
+  .status-card .row { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 9px 0; border-top: 1px solid var(--gray-a200); font-size: 13px; }
+  .status-card .row:first-of-type { border-top: 0; padding-top: 0; }
+  .status-card .row .k { color: var(--gray-900); }
+  .status-card .row .v { font-family: var(--mono); font-size: 12.5px; text-align: right; }
+  .status-card .head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+  .status-card .head .title { font-weight: 500; }
+
+  /* ---------- sections ---------- */
+  main { padding: 28px 0 64px; display: grid; gap: 24px; }
+  .card { background: var(--bg-100); border-radius: 12px; box-shadow: var(--shadow-sm); }
+  .card-h { display: flex; align-items: center; gap: 12px; padding: 16px 20px 0; flex-wrap: wrap; }
+  .card-h .sub { color: var(--gray-900); font-size: 13px; }
+  .card-h .spacer { flex: 1; }
+  .card-b { padding: 16px 20px 20px; }
+
+  /* stat tiles */
+  .stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; }
+  .tile { background: var(--bg-100); border-radius: 12px; box-shadow: var(--shadow-sm); padding: 16px 18px 12px; display: flex; flex-direction: column; gap: 6px; min-width: 0; transition: box-shadow .15s; }
+  .tile:hover { box-shadow: var(--shadow-md); }
+  .tile .k { color: var(--gray-900); font-size: 13px; display: flex; align-items: center; gap: 6px; }
+  .tile .v { font-size: 28px; line-height: 34px; letter-spacing: -0.03em; font-weight: 600; font-variant-numeric: tabular-nums; display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+  .tile .v small { font-size: 13px; line-height: 16px; letter-spacing: 0; font-weight: 500; color: var(--gray-900); }
+  .tile .delta { font-size: 13px; font-weight: 500; letter-spacing: 0; }
+  .tile .delta.up { color: var(--green-900); } .tile .delta.down { color: var(--red-900); } .tile .delta.flat { color: var(--gray-800); }
+  .tile .spark { height: 40px; margin-top: 4px; }
+  .tile .spark svg { width: 100%; height: 40px; display: block; overflow: visible; }
+  .tile .foot { color: var(--gray-800); font-size: 12px; line-height: 16px; }
+
+  /* segmented control */
+  .seg { display: inline-flex; padding: 2px; border-radius: 8px; background: var(--gray-100); border: 1px solid var(--gray-a200); }
+  .seg button { height: 26px; padding: 0 10px; border-radius: 6px; font-size: 13px; color: var(--gray-900); font-weight: 500; }
+  .seg button[aria-pressed="true"] { background: var(--bg-100); color: var(--gray-1000); box-shadow: 0 1px 2px rgba(0,0,0,.12), 0 0 0 1px var(--gray-a400); }
+
+  /* chart */
+  .chart-grid { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(300px, 1fr); gap: 16px; }
+  .chart { position: relative; height: 260px; }
+  .chart .axis text, .chart text { fill: var(--gray-800); font-family: var(--mono); font-size: 11px; }
+  .chart svg { width: 100%; height: 100%; display: block; }
+  .chart .bar { transition: opacity .1s; }
+  .chart .hit { fill: transparent; }
+  .chart .hit:hover ~ .cursor, .chart .hit:hover { }
+  .chart .axis text { fill: var(--gray-800); font-family: var(--mono); font-size: 11px; }
+  .chart .grid line { stroke: var(--gray-a400); stroke-dasharray: 2 4; }
+  .chart .base { stroke: var(--gray-500); }
+  .tooltip { position: absolute; pointer-events: none; z-index: 5; background: var(--gray-1000); color: var(--bg-100); border-radius: 8px; padding: 8px 10px; font-size: 12px; line-height: 16px; min-width: 150px; box-shadow: 0 8px 24px rgba(0,0,0,.25); transform: translate(-50%, -100%); white-space: nowrap; }
+  .tooltip .t { font-family: var(--mono); opacity: .7; margin-bottom: 4px; }
+  .tooltip .r { display: flex; justify-content: space-between; gap: 14px; } .tooltip .r i { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 6px; vertical-align: -0.5px; }
+  .legend { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12px; color: var(--gray-900); }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .legend i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+  .c-bounty { background: var(--s-bounty); } .c-commit { background: var(--s-commit); } .c-delivery { background: var(--s-delivery); } .c-dispute { background: var(--s-dispute); } .c-settle { background: var(--s-settle); } .c-admin { background: var(--s-admin); }
+
+  /* funnel */
+  .funnel { display: grid; gap: 8px; }
+  .funnel .step { display: grid; grid-template-columns: 22px 1fr auto; align-items: center; gap: 10px; font-size: 13px; }
+  .funnel .n { width: 22px; height: 22px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-family: var(--mono); font-size: 11px; background: var(--gray-100); color: var(--gray-900); border: 1px solid var(--gray-a400); }
+  .funnel .n.on { background: var(--gray-1000); color: var(--bg-100); border-color: var(--gray-1000); }
+  .funnel .bar { height: 6px; border-radius: 3px; background: var(--gray-200); overflow: hidden; margin-top: 4px; }
+  .funnel .bar i { display: block; height: 100%; background: var(--gray-1000); border-radius: 3px; }
+  .funnel .name { font-weight: 500; } .funnel .desc { color: var(--gray-800); font-size: 12px; }
+  .funnel .cnt { font-family: var(--mono); font-size: 13px; font-variant-numeric: tabular-nums; }
+  .funnel .term { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; padding-top: 12px; border-top: 1px solid var(--gray-a200); }
+
+  /* tabs */
+  .tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--gray-a400); position: sticky; top: 56px; z-index: 10; background: var(--bg-200); }
+  .tabs button { position: relative; height: 44px; padding: 0 12px; color: var(--gray-900); font-weight: 500; font-size: 14px; display: inline-flex; align-items: center; gap: 8px; }
+  .tabs button:hover { color: var(--gray-1000); }
+  .tabs button[aria-selected="true"] { color: var(--gray-1000); }
+  .tabs button[aria-selected="true"]::after { content: ""; position: absolute; left: 8px; right: 8px; bottom: -1px; height: 2px; background: var(--gray-1000); border-radius: 1px; }
+  .tabs .cnt { font-family: var(--mono); font-size: 11px; padding: 1px 6px; border-radius: 999px; background: var(--gray-100); color: var(--gray-900); border: 1px solid var(--gray-a400); }
+
+  /* toolbar */
+  .toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+  .search { display: inline-flex; align-items: center; gap: 8px; height: 32px; padding: 0 10px; border-radius: 6px; border: 1px solid var(--gray-a500); background: var(--bg-100); color: var(--gray-900); min-width: 220px; }
+  .search:focus-within { border-color: var(--gray-700); box-shadow: 0 0 0 3px var(--gray-a200); }
+  .search input { border: 0; outline: 0; background: none; color: var(--gray-1000); font: inherit; width: 100%; }
+  .search svg { width: 14px; height: 14px; flex: none; }
+
+  /* tables */
+  .tbl { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 13px; }
+  .tbl th { text-align: left; color: var(--gray-900); font-weight: 500; font-size: 12px; padding: 10px 12px; border-bottom: 1px solid var(--gray-a400); white-space: nowrap; background: var(--bg-100); }
+  .tbl td { padding: 12px; border-bottom: 1px solid var(--gray-a200); vertical-align: top; }
+  .tbl tr:last-child td { border-bottom: 0; }
+  .tbl .r { text-align: right; font-variant-numeric: tabular-nums; }
+  .tbl .num { font-family: var(--mono); font-variant-numeric: tabular-nums; font-size: 12.5px; white-space: nowrap; }
+  .tbl .nowrap { white-space: nowrap; }
+  .tbl tr.row { cursor: pointer; transition: background .1s; } .tbl tr.row:hover td { background: var(--gray-a200); }
+  .tbl tr.row[aria-expanded="true"] td { background: var(--gray-a200); border-bottom-color: transparent; }
+  .tbl .chev { width: 14px; height: 14px; color: var(--gray-700); transition: transform .15s; }
+  .tbl tr.row[aria-expanded="true"] .chev { transform: rotate(90deg); }
+  .tbl tr.detail > td { padding: 0 12px 16px; background: var(--gray-a200); }
+  .tbl .empty { color: var(--gray-800); text-align: center; padding: 28px 12px; }
+  .scroll-x { overflow-x: auto; }
+
+  .addr { display: inline-flex; align-items: center; gap: 7px; font-family: var(--mono); font-size: 12.5px; white-space: nowrap; }
+  .addr .id { width: 16px; height: 16px; border-radius: 50%; flex: none; box-shadow: inset 0 0 0 1px rgba(0,0,0,.15); }
+  .addr .who { font-family: var(--sans); font-size: 11px; color: var(--gray-900); background: var(--gray-100); border: 1px solid var(--gray-a400); padding: 0 6px; border-radius: 999px; line-height: 16px; }
+  a.addr:hover { text-decoration: underline; text-underline-offset: 3px; }
+  .tx { display: inline-flex; align-items: center; gap: 3px; color: var(--gray-800); font-family: var(--mono); font-size: 12px; }
+  .tx:hover { color: var(--blue-900); } .tx svg { width: 11px; height: 11px; }
+
+  .pill { display: inline-flex; align-items: center; gap: 6px; height: 22px; padding: 0 8px; border-radius: 999px; font-size: 12px; font-weight: 500; white-space: nowrap; }
+  .pill::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+  .s-Open { background: var(--blue-100); color: var(--blue-900); }
+  .s-Committed, .s-Sampled, .s-Approved, .s-Delivered { background: var(--amber-100); color: var(--amber-900); }
+  .s-Disputed { background: var(--red-100); color: var(--red-900); }
+  .s-Settled { background: var(--green-100); color: var(--green-900); }
+  .s-Refunded { background: var(--purple-100); color: var(--purple-900); }
+  .s-Cancelled { background: var(--gray-100); color: var(--gray-900); }
+
+  /* difficulty band */
+  .band { width: 180px; }
+  .band .lbl span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 130px; }
+  .band .track { position: relative; height: 6px; border-radius: 3px; background: var(--gray-200); margin: 6px 0 4px; }
+  .band .weak { position: absolute; left: 0; top: 0; height: 100%; background: var(--red-700); opacity: .7; border-radius: 3px 0 0 3px; }
+  .band .strong { position: absolute; right: 0; top: 0; height: 100%; background: var(--green-700); opacity: .8; border-radius: 0 3px 3px 0; }
+  .band .lbl { display: flex; justify-content: space-between; font-family: var(--mono); font-size: 11px; color: var(--gray-900); }
+
+  /* detail */
+  .detail-grid { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 20px; padding: 16px; background: var(--bg-100); border-radius: 10px; box-shadow: var(--shadow-sm); }
+  .detail h4 { margin: 0 0 10px; font-size: 12px; font-weight: 500; color: var(--gray-900); text-transform: uppercase; letter-spacing: .06em; }
+  .timeline { list-style: none; margin: 0; padding: 0; position: relative; }
+  .timeline::before { content: ""; position: absolute; left: 5px; top: 8px; bottom: 8px; width: 1px; background: var(--gray-a500); }
+  .timeline li { position: relative; padding: 4px 0 8px 22px; font-size: 13px; line-height: 18px; }
+  .timeline li::before { content: ""; position: absolute; left: 1px; top: 9px; width: 9px; height: 9px; border-radius: 50%; background: var(--bg-100); border: 2px solid var(--gray-700); }
+  .timeline li.bounty::before { border-color: var(--s-bounty); } .timeline li.commit::before { border-color: var(--s-commit); }
+  .timeline li.delivery::before { border-color: var(--s-delivery); } .timeline li.dispute::before { border-color: var(--s-dispute); } .timeline li.settle::before { border-color: var(--s-settle); }
+  .timeline .t { font-family: var(--mono); font-size: 11px; color: var(--gray-800); margin-right: 8px; }
+  .timeline .e { font-weight: 500; margin-right: 6px; }
+  .task { border: 1px solid var(--gray-a400); border-radius: 8px; padding: 10px 12px; margin-bottom: 8px; font-size: 13px; background: var(--bg-200); }
+  .task .hd { display: flex; gap: 8px; align-items: center; margin-bottom: 6px; font-family: var(--mono); font-size: 11.5px; color: var(--gray-900); }
+  .task .hd b { color: var(--purple-900); font-weight: 500; }
+  .task .p { white-space: pre-wrap; word-break: break-word; }
+  .task .ref { margin-top: 6px; font-family: var(--mono); font-size: 12px; color: var(--gray-900); } .task .ref b { color: var(--green-900); font-weight: 500; }
+  .kv { display: grid; grid-template-columns: max-content 1fr; gap: 6px 14px; font-size: 12.5px; margin-top: 14px; }
+  .kv b { color: var(--gray-900); font-weight: 500; } .kv span { font-family: var(--mono); font-size: 11.5px; word-break: break-all; color: var(--gray-1000); }
+  .deadlines { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+
+  /* log */
+  .log { max-height: 520px; overflow: auto; font-family: var(--mono); font-size: 12.5px; line-height: 18px; border-top: 1px solid var(--gray-a400); }
+  .log .ln { display: grid; grid-template-columns: 64px 128px minmax(0, 1fr) auto; gap: 12px; padding: 7px 20px; border-bottom: 1px solid var(--gray-a200); align-items: start; }
+  .log .ln:hover { background: var(--gray-a200); }
+  .log .ln .t { color: var(--gray-800); } .log .ln .m { font-family: var(--sans); font-size: 13px; color: var(--gray-1000); word-break: break-word; }
+  .log .ev { display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--gray-900); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .log .ev i { width: 7px; height: 7px; border-radius: 2px; flex: none; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chip { height: 26px; padding: 0 10px; border-radius: 999px; border: 1px solid var(--gray-a500); font-size: 12px; color: var(--gray-900); display: inline-flex; align-items: center; gap: 6px; background: var(--bg-100); }
+  .chip[aria-pressed="true"] { background: var(--gray-1000); color: var(--bg-100); border-color: var(--gray-1000); }
+  .chip i { width: 8px; height: 8px; border-radius: 2px; }
+
+  /* mechanism */
+  .steps { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 12px; }
+  .step-card { background: var(--bg-100); border-radius: 10px; box-shadow: var(--shadow-sm); padding: 14px; display: flex; flex-direction: column; gap: 6px; }
+  .step-card .n { font-family: var(--mono); font-size: 11px; color: var(--gray-800); }
+  .step-card .t { font-weight: 600; letter-spacing: -0.01em; }
+  .step-card .d { font-size: 12.5px; line-height: 18px; color: var(--gray-900); }
+  .notes { display: grid; grid-template-columns: 1fr 1fr; gap: 16px 32px; }
+  .note b { display: block; font-weight: 600; margin-bottom: 4px; letter-spacing: -0.01em; }
+  .note p { margin: 0; color: var(--gray-900); font-size: 13px; line-height: 20px; }
+  .note code { background: var(--gray-100); border: 1px solid var(--gray-a400); border-radius: 4px; padding: 0 5px; font-size: 12px; }
+  .callout { border-radius: 10px; padding: 14px 16px; background: var(--amber-100); color: var(--amber-1000); font-size: 13px; line-height: 20px; display: flex; gap: 10px; }
+  .callout svg { width: 16px; height: 16px; flex: none; margin-top: 2px; color: var(--amber-900); }
+  .callout b { font-weight: 600; }
+
+  footer { border-top: 1px solid var(--gray-a400); background: var(--bg-100); }
+  footer .wrap { display: flex; flex-wrap: wrap; gap: 8px 24px; align-items: center; padding: 20px 24px; color: var(--gray-900); font-size: 13px; }
+  footer .spacer { flex: 1; }
+
+  @media (max-width: 1000px) {
+    .hero .wrap { grid-template-columns: 1fr; padding-top: 40px; }
+    .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .chart-grid, .notes, .detail-grid { grid-template-columns: 1fr; }
+    .steps { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .h48 { font-size: 36px; line-height: 42px; }
+  }
+  @media (max-width: 640px) {
+    .wrap { padding: 0 16px; }
+    .stats, .steps { grid-template-columns: 1fr; }
+    .nav .hide-sm { display: none; }
+    .log .ln { grid-template-columns: 1fr; gap: 2px; }
+    .tabs { overflow-x: auto; }
+  }
 </style>
 </head>
 <body>
-<header>
-  <h1>EvalBounty <small>the Black Box Bazaar for AI evaluations · Ethereum Sepolia</small></h1>
-  <p class="lede">
-    AI labs pay for <b>fresh, hard evaluation tasks</b>, and a task loses its value the moment it is seen (contamination), so the buyer
-    cannot inspect the goods before paying. Here a <b>buyer agent</b> posts a bounty that defines value in a way a machine can check
-    (size, domain, and a difficulty band on pinned models); a <b>seller agent</b> commits to a hidden bundle with a bond; the
-    <b>hash of the next block</b> picks a random sample the seller must reveal with Merkle proofs; the rest is delivered
-    <b>encrypted</b>; the buyer <b>re-runs the difficulty claims</b> and pays, or disputes to a bonded <b>arbiter</b>. Every step below is a real transaction.
-  </p>
-  <div class="steps">
-    <div class="step"><b>1 · Bounty</b><span>Buyer escrows the reward and pins models, band, tolerance and run params.</span></div>
-    <div class="step"><b>2 · Commit</b><span>Seller posts Merkle root + bundle hash + bond ≥ 50 % of reward. Sample block = next block.</span></div>
-    <div class="step"><b>3 · Sample</b><span>blockhash picks k of N tasks; seller must reveal exactly those with proofs.</span></div>
-    <div class="step"><b>4 · Judge</b><span>Buyer checks the sample is well-posed and in domain, approves or walks away.</span></div>
-    <div class="step"><b>5 · Deliver</b><span>Bundle encrypted to the buyer's X25519 key, posted in the event log.</span></div>
-    <div class="step"><b>6 · Verify</b><span>Buyer decrypts, checks hash + root, re-runs claims, accepts or disputes (ERC-792 arbiter).</span></div>
+
+<nav class="topbar">
+  <div class="wrap">
+    <a class="brand" href="./">
+      <svg viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="7" fill="currentColor"/><path d="M16 6l9 5v10l-9 5-9-5V11z M16 16l9-5 M16 16v10 M16 16l-9-5" fill="none" stroke="var(--bg-100)" stroke-width="2" stroke-linejoin="round"/></svg>
+      EvalBounty
+      <span class="badge" id="netBadge">Sepolia</span>
+    </a>
+    <div class="nav">
+      <a id="navContract" class="hide-sm" target="_blank" rel="noopener">Contract <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M6 3h7v7M13 3 5 11"/></svg></a>
+      <a id="navArbiter" class="hide-sm" target="_blank" rel="noopener">Arbitrator <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M6 3h7v7M13 3 5 11"/></svg></a>
+      <a id="navRepo" href="https://github.com/shaunikm/technical-interview" target="_blank" rel="noopener">Source <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M6 3h7v7M13 3 5 11"/></svg></a>
+      <a id="navVideo" hidden target="_blank" rel="noopener">Video <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M6 3h7v7M13 3 5 11"/></svg></a>
+      <span class="live" id="live"><span class="dot wait"></span><span>connecting</span></span>
+      <button class="icon-btn" id="themeBtn" title="Toggle theme" aria-label="Toggle theme">
+        <svg class="i-moon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M13.5 9.5A5.5 5.5 0 0 1 6.5 2.5a5.5 5.5 0 1 0 7 7z"/></svg>
+        <svg class="i-sun" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="3"/><path d="M8 1v2M8 13v2M1 8h2M13 8h2M3 3l1.5 1.5M11.5 11.5 13 13M3 13l1.5-1.5M11.5 4.5 13 3"/></svg>
+      </button>
+    </div>
+  </div>
+</nav>
+
+<header class="hero">
+  <div class="wrap">
+    <span class="cross" style="left:15px;top:-9px"></span><span class="cross" style="right:15px;top:-9px"></span>
+    <span class="cross" style="left:15px;bottom:-9px"></span><span class="cross" style="right:15px;bottom:-9px"></span>
+    <div>
+      <div class="eyebrow"><span class="badge blue">Black Box Bazaar</span><span class="badge">B@B Fa'26 take-home</span></div>
+      <h1 class="h48">A sealed market for <span class="dim">AI evaluation tasks</span> that the buyer can't see before paying.</h1>
+      <p class="lede copy-16">
+        A benchmark loses its value the moment it is seen, so here the goods stay hidden. A <b>buyer agent</b> escrows a reward and
+        defines value in machine-checkable terms; a <b>seller agent</b> commits to a hidden bundle with a bond; the <b>next block's hash</b>
+        picks a sample the seller must reveal with Merkle proofs; the rest is delivered <b>encrypted</b>; the buyer <b>reruns the difficulty claims</b>
+        and pays, or disputes to a bonded <b>arbiter</b>. This page is a read-only window on the contract. Every row below is a real transaction.
+      </p>
+      <div class="cta">
+        <a class="btn primary" id="ctaContract" target="_blank" rel="noopener">View contract on Etherscan <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M6 3h7v7M13 3 5 11"/></svg></a>
+        <button class="btn" data-tab="mechanism">How the mechanism works</button>
+      </div>
+    </div>
+    <div class="status-card" id="statusCard">
+      <div class="head"><span class="title">Live state</span><span class="badge gray" id="refreshedAt">…</span></div>
+      <div class="row"><span class="k">Network</span><span class="v" id="stNet">—</span></div>
+      <div class="row"><span class="k">Head block</span><span class="v" id="stBlock">—</span></div>
+      <div class="row"><span class="k">Market contract</span><span class="v" id="stContract">—</span></div>
+      <div class="row"><span class="k">Arbitrator</span><span class="v" id="stArb">—</span></div>
+      <div class="row"><span class="k">Events indexed</span><span class="v" id="stEvents">—</span></div>
+      <div class="row"><span class="k">Escrowed now</span><span class="v" id="stEscrow">—</span></div>
+    </div>
   </div>
 </header>
-<main>
-  <section>
-    <div class="statusbar" id="statusbar"><span class="dot"></span><span>connecting…</span></div>
-  </section>
 
-  <section>
-    <h2>Bounties <span class="sub" id="bountyCount"></span></h2>
-    <div style="overflow-x:auto"><table id="bounties"><thead><tr>
-      <th>#</th><th>Status</th><th>Spec</th><th>Band</th><th>Reward</th><th>Buyer</th><th>Seller</th><th>Last event</th>
-    </tr></thead><tbody></tbody></table></div>
-    <div class="empty" id="bountiesEmpty" hidden>No bounties yet. Run the buyer agent to post one.</div>
-  </section>
+<main class="wrap">
+  <section class="stats" id="stats" aria-label="Key metrics"></section>
 
-  <div class="grid2">
-    <section>
-      <h2>Seller reputation <span class="sub">on-chain counters</span></h2>
-      <div style="overflow-x:auto"><table id="sellers"><thead><tr><th>Seller</th><th>Commits</th><th>Rejected</th><th>Abandoned</th><th>Delivered</th><th>Timeouts</th><th>Settled</th><th>Won</th><th>Lost</th><th>Volume</th></tr></thead><tbody></tbody></table></div>
+  <div class="chart-grid">
+    <section class="card">
+      <div class="card-h">
+        <h2 class="h16">Activity</h2>
+        <span class="sub">contract events by lifecycle stage</span>
+        <span class="spacer"></span>
+        <div class="seg" id="rangeSeg" role="group" aria-label="Time range">
+          <button data-range="24h">24h</button><button data-range="7d">7d</button><button data-range="30d">30d</button><button data-range="all" aria-pressed="true">All time</button>
+        </div>
+      </div>
+      <div class="card-b">
+        <div class="legend" id="legend" style="margin-bottom:10px"></div>
+        <div class="chart" id="chart"></div>
+      </div>
     </section>
-    <section>
-      <h2>Buyer reputation</h2>
-      <div style="overflow-x:auto"><table id="buyers"><thead><tr><th>Buyer</th><th>Created</th><th>Settled</th><th>Disputes</th><th>Lost</th></tr></thead><tbody></tbody></table></div>
+    <section class="card">
+      <div class="card-h"><h2 class="h16">Lifecycle</h2><span class="sub">how far bounties get</span></div>
+      <div class="card-b"><div class="funnel" id="funnel"></div></div>
     </section>
   </div>
 
-  <section>
-    <h2>Agent log <span class="sub">every contract event, in plain English, newest last</span></h2>
-    <div class="log" id="log"></div>
-  </section>
+  <div class="tabs" role="tablist" id="tabs">
+    <button role="tab" data-tab="bounties" aria-selected="true">Bounties <span class="cnt" id="cntBounties">0</span></button>
+    <button role="tab" data-tab="reputation">Reputation</button>
+    <button role="tab" data-tab="log">Agent log <span class="cnt" id="cntLog">0</span></button>
+    <button role="tab" data-tab="mechanism">How it works</button>
+  </div>
 
-  <section>
-    <h2>Who acts here <span class="sub">this page is a window, not a wallet</span></h2>
-    <div class="kv">
-      <b>The market</b><span>is the <code>EvalBounty</code> contract on Sepolia. It escrows rewards and bonds, enforces the state machine, verifies Merkle proofs, pays out, and keeps the reputation counters. Every arrow in the steps above is a transaction.</span>
-      <b>The participants</b><span>are autonomous agents: three Node processes (<code>buyer</code>, <code>seller</code>, <code>arbiter</code>), each holding its own key. They never talk to this page. They read the contract's events through an RPC, decide (generate tasks, judge a sample, re-run model claims, rule), and send transactions straight to the contract. The chain is their only shared channel.</span>
-      <b>This page</b><span>is static HTML that reads the same events through a public RPC and narrates them. It holds no keys, sends no transactions and cannot spend anything, so it can be public. To take part you run an agent, not a button: <code>pnpm --filter agents buyer</code>, <code>seller</code>, <code>arbiter</code> (see the README). The seller and arbiter re-run pinned models, so they run where the model API keys live, not in a browser.</span>
+  <section class="card" data-panel="bounties" role="tabpanel">
+    <div class="card-h">
+      <div class="toolbar">
+        <div class="seg" id="statusSeg" role="group" aria-label="Status filter">
+          <button data-status="all" aria-pressed="true">All</button><button data-status="live">In progress</button><button data-status="Settled">Settled</button><button data-status="Disputed">Disputed</button><button data-status="Open">Open</button>
+        </div>
+        <label class="search"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="7" cy="7" r="4.5"/><path d="m10.5 10.5 3 3"/></svg><input id="search" type="search" placeholder="Search id, domain, model, address" autocomplete="off" /></label>
+      </div>
+      <span class="spacer"></span>
+      <span class="sub" id="bountySub"></span>
+    </div>
+    <div class="scroll-x" style="margin-top:12px">
+      <table class="tbl" id="bounties">
+        <thead><tr><th style="width:24px"></th><th>Bounty</th><th>Status</th><th>Spec</th><th>Difficulty band</th><th class="r">Reward</th><th>Buyer</th><th>Seller</th><th>Last activity</th></tr></thead>
+        <tbody></tbody>
+      </table>
     </div>
   </section>
 
-  <section>
-    <h2>Mechanism notes</h2>
-    <div class="kv">
-      <b>Why a random sample</b><span>The seller commits before knowing which tasks are shown. A bundle with junk fraction f survives a k-task sample with probability (1−f)<sup>k</sup>: at k = 4, 30 % junk is caught 76 % of the time. Walking away after seeing the sample costs 10 % of the bond, so re-rolling is priced.</span>
-      <b>Why claims, not "quality"</b><span>"Weak model ≤ 35 %, strong model ≥ 65 %, null policy ≤ 5 %" is reproducible by the buyer and the arbiter with the committed run params; "useful" is not. Tolerance ≥ 2·SE (Miller 2024) absorbs rerun noise.</span>
-      <b>Why Sepolia L1</b><span>Sampling uses <code>blockhash(sampleBlock)</code>. Arbitrum documents its blockhash as "cryptographically insecure, pseudo-random" and returns constant 1 for <code>prevrandao</code>; the mechanism is stronger on L1.</span>
-      <b>Why ERC-792</b><span>Disputes go through Kleros' arbitration interface, so the single bonded arbiter used here can be swapped for a court with one <code>setArbitrator</code> call. Rulings: 1 seller, 2 buyer, 0 refused → 50/50 split.</span>
-      <b>Liveness</b><span>Every state has a deadline anyone can <code>finalize</code>: missed delivery slashes the seller, silent buyer settles to the seller, silent arbiter splits. Payouts are pull-payments.</span>
+  <section data-panel="reputation" role="tabpanel" hidden style="display:grid;gap:16px">
+    <div class="card">
+      <div class="card-h"><h2 class="h16">Sellers</h2><span class="sub">on-chain counters per address; rejected samples and abandoned commits are the cheap signals, lost disputes the expensive one</span></div>
+      <div class="scroll-x" style="margin-top:12px"><table class="tbl" id="sellers"><thead><tr><th>Seller</th><th class="r">Commits</th><th class="r">Rejected</th><th class="r">Abandoned</th><th class="r">Delivered</th><th class="r">Timeouts</th><th class="r">Settled</th><th class="r">Won</th><th class="r">Lost</th><th class="r">Volume</th><th>Record</th></tr></thead><tbody></tbody></table></div>
     </div>
-    <div class="limitation"><b>Limitation, stated plainly.</b> The contract enforces delivery and whether the listed difficulty claims hold. It does not verify that tasks are useful beyond the sampled ones, or that they stay secret after sale — that is a contract term backed by reputation, not cryptography.</div>
+    <div class="card">
+      <div class="card-h"><h2 class="h16">Buyers</h2><span class="sub">a buyer that disputes and loses pays with its bond and its record</span></div>
+      <div class="scroll-x" style="margin-top:12px"><table class="tbl" id="buyers"><thead><tr><th>Buyer</th><th class="r">Created</th><th class="r">Settled</th><th class="r">Disputes</th><th class="r">Lost</th><th>Record</th></tr></thead><tbody></tbody></table></div>
+    </div>
+  </section>
+
+  <section class="card" data-panel="log" role="tabpanel" hidden>
+    <div class="card-h">
+      <h2 class="h16">Agent log</h2><span class="sub">every contract event narrated in plain English, oldest first</span>
+      <span class="spacer"></span>
+      <div class="chips" id="logChips"></div>
+    </div>
+    <div class="log" id="log" style="margin-top:12px"></div>
+  </section>
+
+  <section data-panel="mechanism" role="tabpanel" hidden style="display:grid;gap:16px">
+    <div class="steps" id="steps">
+      <div class="step-card"><span class="n">01 · createBounty</span><span class="t">Bounty</span><span class="d">Buyer escrows the reward and pins domain, N, k, weak/strong model ids, difficulty band, runs, tolerance and run params.</span></div>
+      <div class="step-card"><span class="n">02 · commit</span><span class="t">Commit</span><span class="d">Seller posts a Merkle root over the tasks, the bundle hash and a bond ≥ 50 % of the reward. The sample block is the next block.</span></div>
+      <div class="step-card"><span class="n">03 · revealSample</span><span class="t">Sample</span><span class="d">blockhash picks k of N indices; the seller must reveal exactly those with proofs. No cherry-picking, and re-rolling costs 10 % of the bond.</span></div>
+      <div class="step-card"><span class="n">04 · approveSample</span><span class="t">Judge</span><span class="d">Buyer checks the sample is well-posed and in domain, then approves or rejects. Rejection never slashes, it only marks reputation.</span></div>
+      <div class="step-card"><span class="n">05 · deliver</span><span class="t">Deliver</span><span class="d">Bundle encrypted to the buyer's X25519 key and posted in the event log, so delivery itself is public and provable.</span></div>
+      <div class="step-card"><span class="n">06 · accept / dispute</span><span class="t">Verify</span><span class="d">Buyer decrypts, checks hash and root, reruns the claims and accepts, or disputes to an ERC-792 arbitrator that reruns and rules.</span></div>
+    </div>
+    <div class="card">
+      <div class="card-h"><h2 class="h16">Design decisions</h2></div>
+      <div class="card-b notes">
+        <div class="note"><b>Why a random sample</b><p>The seller commits before knowing which tasks will be shown. A bundle with junk fraction f survives a k-task sample with probability (1−f)<sup>k</sup>: at k = 4, 30 % junk is caught 76 % of the time. Walking away after seeing the sample costs 10 % of the bond, so re-rolling is priced.</p></div>
+        <div class="note"><b>Why claims, not "quality"</b><p>"Weak model ≤ 35 %, strong model ≥ 65 %, null policy ≤ 5 %" is reproducible by the buyer and the arbiter with the committed run params; "useful" is not. Tolerance ≥ 2·SE (Miller 2024) absorbs rerun noise. The contract only enforces what it can check.</p></div>
+        <div class="note"><b>Why Sepolia L1</b><p>Sampling uses <code>blockhash(sampleBlock)</code>. Arbitrum documents its blockhash as "cryptographically insecure, pseudo-random" and returns constant 1 for <code>prevrandao</code>; the mechanism is stronger on L1.</p></div>
+        <div class="note"><b>Why ERC-792</b><p>Disputes go through Kleros' arbitration interface, so the single bonded arbiter used here can be swapped for a court with one <code>setArbitrator</code> call. Rulings: 1 seller, 2 buyer, 0 refused → 50/50 split.</p></div>
+        <div class="note"><b>Liveness</b><p>Every state has a deadline anyone can <code>finalize</code>: a missed delivery slashes the seller, a silent buyer settles to the seller, a silent arbiter splits. Payouts are pull-payments, so no party can lock funds.</p></div>
+        <div class="note"><b>Who acts here</b><p>Three Node processes (buyer, seller, arbiter) each hold a key, read the same events through an RPC and send transactions straight to the contract. This page holds no keys and sends nothing; to take part you run an agent, not a button.</p></div>
+      </div>
+    </div>
+    <div class="callout"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 2.5 14 13H2z"/><path d="M8 6.5v3M8 11.5v.5"/></svg><div><b>Limitation, stated plainly.</b> The contract enforces delivery and whether the listed difficulty claims hold. It does not verify that tasks are useful beyond the sampled ones, that they stay secret after sale, or that the single bonded arbitrator is honest. Those are contract terms backed by reputation, not cryptography.</div></div>
   </section>
 </main>
+
 <footer>
-  Source, README and video: <a id="repoLink" href="https://github.com/shaunikm/technical-interview">github.com/shaunikm/technical-interview</a>.
-  Built for the Blockchain at Berkeley Fa'26 technical take-home.
+  <div class="wrap">
+    <span>Built for the Blockchain at Berkeley Fa'26 technical take-home.</span>
+    <span class="spacer"></span>
+    <a class="link" href="https://github.com/shaunikm/technical-interview" target="_blank" rel="noopener">Source &amp; README</a>
+    <a class="link" href="https://github.com/shaunikm/technical-interview/blob/main/dashboard/meta-evidence.json" target="_blank" rel="noopener">Dispute policy (ERC-1497)</a>
+    <span class="mono faint" id="footContract"></span>
+  </div>
 </footer>
 
 <script src="./config.js"></script>
@@ -142,143 +489,6 @@
   }
 </script>
 <script src="./abi.js"></script>
-<script type="module">
-import { createPublicClient, http, parseEventLogs, formatEther } from "https://esm.sh/viem@2.56.3";
-import * as chains from "https://esm.sh/viem@2.56.3/chains";
-
-const cfg = window.EVALBOUNTY_CONFIG;
-const abi = window.EVALBOUNTY_ABI;
-const $ = (s) => document.querySelector(s);
-const STATUS = ["Open","Committed","Sampled","Approved","Delivered","Disputed","Settled","Refunded","Cancelled"];
-const short = (a) => a ? `${a.slice(0,6)}…${a.slice(-4)}` : "—";
-// Without an explorer (local anvil preview) show plain text instead of dead relative links.
-const hasExplorer = !!cfg.explorerBase;
-const addrLink = (a) => !a || a === "0x0000000000000000000000000000000000000000" ? `<span class="muted">—</span>`
-  : hasExplorer ? `<a class="mono" href="${cfg.explorerBase}/address/${a}" target="_blank" rel="noopener">${short(a)}${label(a)}</a>`
-  : `<span class="mono" title="${a}">${short(a)}${label(a)}</span>`;
-const txLink = (h, text="tx") => hasExplorer ? `<a class="mono" href="${cfg.explorerBase}/tx/${h}" target="_blank" rel="noopener">${text}</a>` : `<span class="muted mono" title="${h}">${text === "↗" ? "" : text}</span>`;
-const pct = (bps) => `${(Number(bps)/100).toFixed(0)}%`;
-const eth = (wei) => `${Number(formatEther(wei)).toFixed(4)} ETH`;
-const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
-function label(a) {
-  const l = a.toLowerCase();
-  for (const [k, v] of Object.entries(cfg.agents ?? {})) if (v.toLowerCase() === l) return ` <span class="muted">(${k})</span>`;
-  return "";
-}
-
-const chain = Object.values(chains).find((c) => c && typeof c === "object" && c.id === cfg.chainId) ?? chains.sepolia;
-const client = createPublicClient({ chain, transport: http(cfg.rpcUrl) });
-// multicall3 where the chain has it (Sepolia), plain reads otherwise (local anvil).
-async function readMany(contracts) {
-  if (!contracts.length) return [];
-  if (chain.contracts?.multicall3) return client.multicall({ contracts });
-  return Promise.all(contracts.map((c) => client.readContract(c).then((result) => ({ status: "success", result })).catch((error) => ({ status: "failure", error }))));
-}
-const expanded = new Set();
-let lastRender = 0;
-
-function narrate(ev, b) {
-  const a = ev.args;
-  switch (ev.eventName) {
-    case "BountyCreated": return `Buyer ${short(a.buyer)} posted bounty #${a.id}: ${a.spec.taskCount} ${esc(a.spec.domainTag)} tasks, reveal ${a.spec.sampleSize}, band ${esc(a.spec.weakModel)} ≤ ${pct(a.spec.weakMaxBps)} / ${esc(a.spec.strongModel)} ≥ ${pct(a.spec.strongMinBps)}, reward ${eth(a.reward)}.`;
-    case "Committed": return `Seller ${short(a.seller)} committed to #${a.id}: root ${short(a.taskRoot)}, bundle hash ${short(a.bundleCommitment)}, bond ${eth(a.bond)}. Sample will be drawn from blockhash(${a.sampleBlock}).`;
-    case "SampleRevealed": { let t; try { t = JSON.parse(new TextDecoder().decode(hexToBytes(a.task))); } catch { t = null; } return `#${a.id}: revealed task ${a.index}${t ? ` — “${esc(t.prompt.slice(0,80))}${t.prompt.length>80?"…":""}”` : ""}.`; }
-    case "SampleComplete": return `#${a.id}: all sampled tasks revealed with valid Merkle proofs. Buyer has until ${ts(a.approveBy)} to judge.`;
-    case "SampleApproved": return `Buyer approved the sample of #${a.id}. Seller must deliver by ${ts(a.deliverBy)}.`;
-    case "SampleRejected": return `Buyer rejected the sample of #${a.id} from ${short(a.seller)}: “${esc(a.reason)}”. Bond returned, bounty reopened.`;
-    case "CommitWithdrawn": return `Seller ${short(a.seller)} withdrew its commit on #${a.id}${a.penalty > 0n ? ` and paid a ${eth(a.penalty)} penalty` : ""}.`;
-    case "Delivered": return `#${a.id}: ${((a.ciphertext.length-2)/2).toLocaleString()}-byte ciphertext delivered (hash ${short(a.ciphertextHash)}). Buyer has until ${ts(a.verifyBy)} to accept or dispute.`;
-    case "Accepted": return `Buyer accepted #${a.id}.`;
-    case "Disputed": return `Buyer disputed #${a.id} (${a.kind === 0 ? "BadDelivery" : "ClaimsFailed"}), arbitration dispute ${a.disputeId}. Arbiter must rule by ${ts(a.ruleBy)}.`;
-    case "Ruling": return `Arbitrator ruled dispute ${a._disputeID}: ${["refused → split","seller wins","buyer wins"][Number(a._ruling)] ?? a._ruling}.`;
-    case "Settled": return `#${a.id} settled: seller ${short(a.seller)} receives ${eth(a.sellerPayout)}, treasury fee ${eth(a.fee)}.`;
-    case "Refunded": return `#${a.id} refunded: buyer ${short(a.buyer)} receives ${eth(a.buyerPayout)}.`;
-    case "Split": return `#${a.id} split: buyer ${eth(a.buyerPayout)}, seller ${eth(a.sellerPayout)}.`;
-    case "Finalized": return `#${a.id} finalized: ${esc(a.reason)}.`;
-    case "Withdrawn": return `${short(a.account)} withdrew ${eth(a.amount)}.`;
-    case "BountyCancelled": return `#${a.id} cancelled by its buyer.`;
-    case "Evidence": return `Evidence submitted by ${short(a._party)}: ${esc(a._evidence.slice(0,120))}`;
-    case "Dispute": return `ERC-1497 dispute ${a._disputeID} registered with arbitrator ${short(a._arbitrator)}.`;
-    case "MetaEvidence": return `Dispute policy published: ${esc(a._evidence)}`;
-    case "OwnershipTransferred": return `Contract deployed; owner is ${short(a.newOwner)}.`;
-    case "ArbitratorUpdated": return `Arbitrator set to ${short(a.arbitrator)}.`;
-    default: return `${ev.eventName}`;
-  }
-}
-function hexToBytes(h) { const s = h.slice(2); const out = new Uint8Array(s.length/2); for (let i=0;i<out.length;i++) out[i]=parseInt(s.substr(i*2,2),16); return out; }
-function ts(sec) { return new Date(Number(sec)*1000).toLocaleTimeString(); }
-
-async function refresh() {
-  try {
-    const head = await client.getBlockNumber();
-    const logs = await client.getLogs({ address: cfg.contractAddress, fromBlock: BigInt(cfg.deployBlock), toBlock: "latest" });
-    const events = parseEventLogs({ abi, logs }).sort((x,y) => Number(x.blockNumber - y.blockNumber) || x.logIndex - y.logIndex);
-    const blockTimes = {};
-    const uniqBlocks = [...new Set(events.map(e => e.blockNumber.toString()))].slice(-60);
-    await Promise.all(uniqBlocks.map(async bn => { const b = await client.getBlock({ blockNumber: BigInt(bn) }); blockTimes[bn] = Number(b.timestamp); }));
-
-    const count = Number(await client.readContract({ address: cfg.contractAddress, abi, functionName: "bountyCount" }));
-    const bounties = await readMany(Array.from({length: count}, (_, i) => ({ address: cfg.contractAddress, abi, functionName: "getBounty", args: [BigInt(i)] })));
-
-    const byId = {};
-    for (const e of events) { const id = e.args?.id?.toString(); if (id !== undefined) (byId[id] ??= []).push(e); }
-
-    $("#statusbar").innerHTML = `<span class="dot"></span><span>${chain.name} · block ${head}</span><span>contract ${addrLink(cfg.contractAddress)}${hasExplorer ? ` · <a href="${cfg.explorerBase}/address/${cfg.contractAddress}#code" target="_blank" rel="noopener">verified source</a>` : " (local anvil preview)"}</span><span>arbitrator ${addrLink(cfg.arbitratorAddress)}</span><span>${events.length} events · refreshed ${new Date().toLocaleTimeString()}</span>`;
-
-    // bounties
-    const tbody = $("#bounties tbody"); tbody.innerHTML = "";
-    $("#bountyCount").textContent = count ? `${count} total` : "";
-    $("#bountiesEmpty").hidden = count > 0;
-    for (let i = count - 1; i >= 0; i--) {
-      const r = bounties[i]; if (r.status !== "success") continue; const b = r.result; const s = b.spec;
-      const evs = byId[String(i)] ?? []; const last = evs[evs.length-1];
-      const tr = document.createElement("tr"); tr.className = "bounty";
-      tr.innerHTML = `<td class="mono">#${i}</td><td><span class="pill s-${STATUS[b.status]}">${STATUS[b.status]}</span></td>
-        <td>${esc(s.domainTag)}<br><span class="muted">${s.taskCount} tasks · reveal ${s.sampleSize} · ${s.runs} run(s)</span></td>
-        <td class="band">${esc(s.weakModel)} ≤ ${pct(s.weakMaxBps)}<br>${esc(s.strongModel)} ≥ ${pct(s.strongMinBps)}<br>null ≤ ${pct(s.nullMaxBps)} · ±${pct(s.toleranceBps)}</td>
-        <td class="mono">${eth(b.reward)}<br><span class="muted">bond ${eth(b.sellerBond)}</span></td>
-        <td>${addrLink(b.buyer)}</td><td>${addrLink(b.seller)}</td>
-        <td>${last ? `${last.eventName} ${txLink(last.transactionHash, "↗")}` : "—"}</td>`;
-      tr.onclick = () => { expanded.has(i) ? expanded.delete(i) : expanded.add(i); render(); };
-      tbody.appendChild(tr);
-      if (expanded.has(i)) {
-        const d = document.createElement("tr"); d.className = "detail";
-        const revealed = evs.filter(e => e.eventName === "SampleRevealed");
-        const lastCommitIdx = evs.map(e=>e.eventName).lastIndexOf("Committed");
-        const current = revealed.filter(e => evs.indexOf(e) > lastCommitIdx);
-        d.innerHTML = `<td colspan="8"><div class="grid2">
-          <div><b>Timeline</b><ul class="timeline">${evs.map(e => `<li><span class="t">${blockTimes[e.blockNumber.toString()] ? new Date(blockTimes[e.blockNumber.toString()]*1000).toLocaleTimeString() : ""}</span>${narrate(e, b)} ${txLink(e.transactionHash, "↗")}</li>`).join("")}</ul></div>
-          <div><b>Revealed sample (current commit)</b>${current.length ? current.map(e => { let t; try { t = JSON.parse(new TextDecoder().decode(hexToBytes(e.args.task))); } catch { return ""; } return `<div class="task"><span class="idx">task ${e.args.index}</span> <span class="muted">${esc(t.family)} · d${t.difficulty}</span><br>${esc(t.prompt)}<br><span class="muted">reference:</span> <span class="ref">${esc(t.reference)}</span> <span class="muted">(${esc(t.grader.type)})</span></div>`; }).join("") : `<div class="empty">nothing revealed yet</div>`}
-          <div class="kv" style="margin-top:12px"><b>task root</b><span class="mono">${b.taskRoot}</span><b>bundle hash</b><span class="mono">${b.bundleCommitment}</span><b>sample block</b><span class="mono">${b.sampleBlock}</span><b>buyer X25519</b><span class="mono">${b.buyerPubKey}</span></div></div>
-        </div></td>`;
-        tbody.appendChild(d);
-      }
-    }
-
-    // reputation
-    const sellers = [...new Set(events.filter(e => e.eventName === "Committed").map(e => e.args.seller))];
-    const buyers = [...new Set(events.filter(e => e.eventName === "BountyCreated").map(e => e.args.buyer))];
-    const [srep, brep] = await Promise.all([
-      readMany(sellers.map(a => ({ address: cfg.contractAddress, abi, functionName: "sellerRep", args: [a] }))),
-      readMany(buyers.map(a => ({ address: cfg.contractAddress, abi, functionName: "buyerRep", args: [a] }))),
-    ]);
-    $("#sellers tbody").innerHTML = sellers.map((a, i) => { const r = srep[i].result ?? []; return `<tr><td>${addrLink(a)}</td>${r.slice(0,8).map(v => `<td class="mono">${v}</td>`).join("")}<td class="mono">${eth(r[8] ?? 0n)}</td></tr>`; }).join("") || `<tr><td colspan="10" class="empty">no sellers yet</td></tr>`;
-    $("#buyers tbody").innerHTML = buyers.map((a, i) => { const r = brep[i].result ?? []; return `<tr><td>${addrLink(a)}</td>${r.map(v => `<td class="mono">${v}</td>`).join("")}</tr>`; }).join("") || `<tr><td colspan="5" class="empty">no buyers yet</td></tr>`;
-
-    // log
-    const log = $("#log"); const atBottom = log.scrollHeight - log.scrollTop - log.clientHeight < 40;
-    log.innerHTML = events.map(e => `<div><span class="muted">${blockTimes[e.blockNumber.toString()] ? new Date(blockTimes[e.blockNumber.toString()]*1000).toLocaleTimeString() : `#${e.blockNumber}`}</span> <span class="who">${e.eventName}</span> ${narrate(e)} ${txLink(e.transactionHash, "↗")}</div>`).join("") || `<div class="empty">no events yet</div>`;
-    if (atBottom) log.scrollTop = log.scrollHeight;
-    lastRender = Date.now();
-    window.__state = { events, bounties };
-  } catch (err) {
-    console.error(err);
-    $("#statusbar").innerHTML = `<span class="dot" style="background:var(--bad);box-shadow:none"></span><span class="bad">RPC error: ${esc(err.shortMessage ?? err.message)}</span>`;
-  }
-}
-function render() { refresh(); }
-refresh();
-setInterval(refresh, 10_000);
-</script>
+<script type="module" src="./app.js"></script>
 </body>
 </html>

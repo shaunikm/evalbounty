@@ -53,7 +53,8 @@ agents/                    Node 20+/TypeScript (tsx, viem, vitest). pnpm workspa
   test/*.test.ts           vitest unit tests for the libs
   state/                   gitignored: X25519 keys per bounty, arbiter keys, addresses
   .env                     gitignored: burner private keys, RPC, addresses
-dashboard/                 static site (Vercel or GitHub Pages): index.html + config.js + abi.js; reads events via viem ESM CDN
+dashboard/                 static site (Vercel or GitHub Pages): index.html (Geist-token CSS, light/dark) + app.js (viem ESM CDN,
+                           stat tiles, stacked activity chart, lifecycle funnel, filterable bounties/log) + config.js + abi.js
 vercel.json                Vercel project config: no build, serve dashboard/ as static output
 scripts/                   set-keys.sh (hidden-input secrets into agents/.env), go-live.sh (deploy→verify→demo→README), verify-sepolia.sh
 ```
